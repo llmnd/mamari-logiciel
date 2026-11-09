@@ -45,6 +45,7 @@ from mamari_api.modules.agriculture.schemas import (
     ParcelResponse,
     UpdateParcelRequest,
 )
+from mamari_api.modules.audit.service import record_audit_event
 from mamari_api.modules.identity.dependencies import (
     CurrentMembership,
     SessionDep,
@@ -1028,6 +1029,15 @@ async def create_campaign(
     session: SessionDep,
     context: CanOperateAgricultureDep,
 ) -> CampaignResponse:
+    if context.membership.role == "operator" and (
+        data.expected_price_fcfa_per_kg > 0
+        or data.estimated_input_cost_fcfa > 0
+        or data.estimated_other_cost_fcfa > 0
+    ):
+        raise HTTPException(
+            status_code=403,
+            detail="Seul un responsable peut définir les hypothèses financières d’une campagne.",
+        )
     parcel = await session.scalar(
         select(Parcel)
         .join(
@@ -1395,6 +1405,16 @@ async def create_harvest(
         note=data.notes or f"Récolte enregistrée sur la parcelle {parcel.name}.",
         reference_type="agriculture_harvest",
         reference_id=harvest.id,
+    )
+    await record_audit_event(
+        session,
+        organization_id=context.organization.id,
+        actor_id=context.user.id,
+        module="agriculture",
+        action="harvest_recorded",
+        entity_type="harvest",
+        entity_id=harvest.id,
+        summary=f"Récolte de {data.quantity_kg} kg enregistrée sur {parcel.name}.",
     )
     await session.commit()
     await session.refresh(harvest)

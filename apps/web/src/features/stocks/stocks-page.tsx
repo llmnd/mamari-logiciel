@@ -41,6 +41,7 @@ interface StockItem {
   name: string;
   unit: string;
   location: string;
+  minimum_quantity: number | string | null;
   balance: number | string;
   movement_count: number;
   created_at: string;
@@ -186,6 +187,9 @@ export function StocksPage() {
             name: formData.get("name"),
             unit: formData.get("unit"),
             location: formData.get("location"),
+            minimum_quantity: formData.get("minimum_quantity")
+              ? Number(formData.get("minimum_quantity"))
+              : null,
             opening_quantity: quantity,
             note: formData.get("note") || null,
           }),
@@ -200,6 +204,9 @@ export function StocksPage() {
             source: formData.get("source"),
             name: formData.get("name"),
             location: formData.get("location"),
+            minimum_quantity: formData.get("minimum_quantity")
+              ? Number(formData.get("minimum_quantity"))
+              : null,
             product_id: productId || null,
           }),
         });
@@ -238,6 +245,7 @@ export function StocksPage() {
         queryClient.invalidateQueries({ queryKey: ["stocks", "ledger"] }),
         queryClient.invalidateQueries({ queryKey: ["stocks", "movements"] }),
         queryClient.invalidateQueries({ queryKey: ["sales", "products"] }),
+        queryClient.invalidateQueries({ queryKey: ["dashboard", "overview"] }),
       ]);
     } catch (error) {
       setFormError(getApiErrorMessage(error));
@@ -358,7 +366,12 @@ export function StocksPage() {
                     </div>
                     <span className="stocks-record-location">{item.location}</span>
                   </div>
-                  <b>{formatQuantity(item.balance)} <small>{item.unit}</small></b>
+                  <b>
+                    {formatQuantity(item.balance)} <small>{item.unit}</small>
+                    {item.minimum_quantity !== null && Number(item.balance) <= Number(item.minimum_quantity)
+                      ? <small className="stocks-low-stock-label">Sous le seuil</small>
+                      : null}
+                  </b>
                   <div className="stocks-item-actions">
                     <button aria-label={`Historique ${item.name}`} onClick={() => { setSelectedItem(item); setHistoryPage(1); setMode("history"); }} title="Historique" type="button">
                       <History size={16} />
@@ -468,6 +481,7 @@ export function StocksPage() {
                   <div className="auth-form-grid">
                     <label className="auth-field"><span>Unité</span><MeasurementUnitSelect name="unit" required /></label>
                     <label className="auth-field"><span>Lieu de stockage</span><input defaultValue="Magasin" maxLength={120} name="location" required /></label>
+                    <label className="auth-field"><span>Seuil minimum (facultatif)</span><input min="0" name="minimum_quantity" step="0.001" type="number" /></label>
                   </div>
                   <label className="auth-field"><span>Stock d’ouverture (facultatif)</span><input min="0" name="quantity" step="0.001" type="number" defaultValue="0" /></label>
                   <label className="auth-field"><span>Note</span><textarea maxLength={1000} name="note" rows={2} /></label>
@@ -482,6 +496,7 @@ export function StocksPage() {
                   </label>
                   <label className="auth-field"><span>Nom / nature</span><input autoFocus defaultValue={currentItem.name} maxLength={160} minLength={2} name="name" required /></label>
                   <label className="auth-field"><span>Lieu de stockage</span><input defaultValue={currentItem.location} maxLength={120} name="location" required /></label>
+                  <label className="auth-field"><span>Seuil minimum (facultatif)</span><input defaultValue={currentItem.minimum_quantity ?? ""} min="0" name="minimum_quantity" step="0.001" type="number" /></label>
                   <label className="auth-field"><span>Produit du catalogue (optionnel)</span>
                     <select defaultValue={currentItem.product_id ?? ""} name="product_id">
                       <option value="">Aucun lien</option>

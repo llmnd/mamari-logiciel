@@ -28,6 +28,7 @@ class CreateStockItemRequest(BaseModel):
     location: Annotated[
         str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)
     ] = "Magasin"
+    minimum_quantity: Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=3)] | None = None
     opening_quantity: Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=3)] = Decimal(0)
     note: Annotated[str, StringConstraints(strip_whitespace=True, max_length=1000)] | None = None
 
@@ -36,6 +37,7 @@ class UpdateStockItemRequest(BaseModel):
     source: StockSource
     name: Annotated[str, StringConstraints(strip_whitespace=True, min_length=2, max_length=160)]
     location: Annotated[str, StringConstraints(strip_whitespace=True, min_length=1, max_length=120)]
+    minimum_quantity: Annotated[Decimal, Field(ge=0, max_digits=14, decimal_places=3)] | None = None
     product_id: uuid.UUID | None = None
 
 
@@ -65,6 +67,7 @@ class StockItemResponse(BaseModel):
     name: str
     unit: str
     location: str
+    minimum_quantity: Decimal | None
     balance: Decimal
     movement_count: int
     created_at: datetime

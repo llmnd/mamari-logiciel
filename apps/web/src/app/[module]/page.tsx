@@ -13,6 +13,9 @@ import { FinancesPage } from "@/features/finances/finances-page";
 import { HumanResourcesPage } from "@/features/human-resources/human-resources-page";
 import { CommunicationPage } from "@/features/communication/communication-page";
 import { CompanyPage } from "@/features/company/company-page";
+import { ActivityPage } from "@/features/audit/activity-page";
+import { ReportsPage } from "@/features/dashboard/reports-page";
+import { PublicInboxPage } from "@/features/public-site/public-inbox-page";
 
 const modules: Record<string, { title: string; description: string }> = {
   operations: {
@@ -67,6 +70,18 @@ const modules: Record<string, { title: string; description: string }> = {
     title: "Centre d'aide",
     description: "Retrouvez les ressources et informations pour vous accompagner.",
   },
+  activite: {
+    title: "Activité et approbations",
+    description: "Suivez le journal d’activité et traitez les demandes soumises par les équipes.",
+  },
+  rapports: {
+    title: "Rapports d’activité",
+    description: "Comparez et exportez les indicateurs opérationnels de votre organisation.",
+  },
+  messages: {
+    title: "Messages et newsletter",
+    description: "Consultez les demandes du site public et les inscriptions à la newsletter.",
+  },
 };
 
 export function generateStaticParams() {
@@ -92,6 +107,9 @@ export default async function ModulePage({
   if (module === "rh") return <HumanResourcesPage />;
   if (module === "communication") return <CommunicationPage />;
   if (module === "entreprise") return <CompanyPage />;
+  if (module === "activite") return <ActivityPage />;
+  if (module === "rapports") return <ReportsPage />;
+  if (module === "messages") return <PublicInboxPage />;
 
   return (
     <div className="dashboard-content">

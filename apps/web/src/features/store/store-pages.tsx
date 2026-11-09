@@ -158,12 +158,15 @@ function PublicFooter() {
           <Link href="/qui-sommes-nous">Qui sommes-nous ?</Link>
           <Link href="/produits">La boutique</Link>
           <Link href="/panier">Votre panier</Link>
+          <Link href="/contact">Nous contacter</Link>
         </nav>
         <div className="public-footer-team">
           <h2>Une question ?</h2>
           <p>Notre équipe est à votre écoute pour vous accompagner.</p>
           <Link href="/login?next=%2Fmon-compte">Espace client <ArrowRight size={14} /></Link>
           <Link href="/dashboard">Espace équipe <ArrowRight size={14} /></Link>
+          <Link href="/confidentialite">Confidentialité</Link>
+          <Link href="/conditions-de-vente">Conditions de vente</Link>
         </div>
       </div>
       <div className="public-footer-bottom">
@@ -328,12 +331,35 @@ export function PublicHomePage() {
     retry: false,
   });
   const featuredProducts = products.data?.items.slice(0, 3) ?? [];
-  const [subscribed, setSubscribed] = useState(false);
+  const newsletter = useMutation({
+    mutationFn: (submission: { email: string; website: string }) =>
+      apiRequest<{
+        subscribed: boolean;
+        already_subscribed: boolean;
+        unsubscribe_token: string | null;
+      }>("/public/newsletter", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...submission, consent: true }),
+      }),
+  });
+  const unsubscribe = useMutation({
+    mutationFn: (token: string) =>
+      apiRequest<void>("/public/newsletter/unsubscribe", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ token }),
+      }),
+  });
+  const unsubscribeToken = newsletter.data?.unsubscribe_token;
 
   function handleNewsletter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    setSubscribed(true);
-    event.currentTarget.reset();
+    const formData = new FormData(event.currentTarget);
+    newsletter.mutate({
+      email: String(formData.get("email") ?? "").trim(),
+      website: String(formData.get("website") ?? ""),
+    });
   }
 
   return (
@@ -643,8 +669,8 @@ export function PublicHomePage() {
             <p className="public-eyebrow">L&apos;aventure Mamari</p>
             <h2>Une question ou une envie de collaborer ?</h2>
           </div>
-          <Link className="public-secondary-link" href="/qui-sommes-nous">
-            Qui sommes-nous ? <ChevronRight size={16} />
+          <Link className="public-secondary-link" href="/contact">
+            Écrivez-nous <ChevronRight size={16} />
           </Link>
         </section>
 
@@ -663,21 +689,204 @@ export function PublicHomePage() {
               </div>
             </div>
             <form className="public-newsletter-form" onSubmit={handleNewsletter}>
-              {subscribed ? (
-                <p className="public-newsletter-success" role="status">
-                  <Check size={16} /> Merci ! Vous êtes bien inscrit·e.
-                </p>
+              {newsletter.isSuccess ? (
+                <div className="public-newsletter-confirmation" role="status">
+                  <p className="public-newsletter-success">
+                    <Check size={16} />
+                    {unsubscribe.isSuccess
+                      ? "Votre désinscription est enregistrée."
+                      : newsletter.data.already_subscribed
+                        ? "Cette adresse est déjà inscrite."
+                        : "Votre inscription est enregistrée."}
+                  </p>
+                  {unsubscribeToken && !unsubscribe.isSuccess ? (
+                    <button
+                      type="button"
+                      className="public-newsletter-unsubscribe"
+                      disabled={unsubscribe.isPending}
+                      onClick={() => unsubscribe.mutate(unsubscribeToken)}
+                    >
+                      {unsubscribe.isPending ? "Désinscription…" : "Annuler mon inscription"}
+                    </button>
+                  ) : null}
+                  {unsubscribe.isError ? (
+                    <p className="public-form-error" role="alert">{getApiErrorMessage(unsubscribe.error)}</p>
+                  ) : null}
+                </div>
               ) : (
                 <>
-                  <input type="email" name="email" placeholder="votre@email.com" required aria-label="Votre adresse email" />
-                  <button type="submit">
-                    S&apos;inscrire <ArrowRight size={15} />
-                  </button>
+                  <label className="public-form-label" htmlFor="newsletter-email">Votre adresse e-mail</label>
+                  <input id="newsletter-email" type="email" name="email" autoComplete="email" placeholder="votre@email.com" required aria-label="Votre adresse email" />
+                  <input className="public-honeypot" type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
+                  <label className="public-consent">
+                    <input type="checkbox" required />
+                    <span>J’accepte de recevoir les actualités de Mamari. Je pourrai demander le retrait de mon inscription.</span>
+                  </label>
+                  {newsletter.isError ? (
+                    <p className="public-form-error" role="alert">{getApiErrorMessage(newsletter.error)}</p>
+                  ) : null}
+                  {newsletter.isSuccess ? null : (
+                    <button type="submit" disabled={newsletter.isPending}>
+                      {newsletter.isPending ? "Enregistrement…" : "S’inscrire"} <ArrowRight size={15} />
+                    </button>
+                  )}
+                  <small className="public-form-note">
+                    L’inscription est enregistrée. L’envoi des lettres commencera après configuration du service e-mail.
+                  </small>
                 </>
               )}
             </form>
           </div>
         </section>
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+export function PublicContactPage() {
+  const contact = useMutation({
+    mutationFn: (submission: {
+      full_name: string;
+      email: string;
+      subject: string;
+      message: string;
+      website: string;
+    }) =>
+      apiRequest<{ id: string }>("/public/contact", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ ...submission, consent: true }),
+      }),
+  });
+
+  function submitContact(event: FormEvent<HTMLFormElement>) {
+    event.preventDefault();
+    const form = event.currentTarget;
+    const data = new FormData(form);
+    contact.mutate(
+      {
+        full_name: String(data.get("full_name") ?? "").trim(),
+        email: String(data.get("email") ?? "").trim(),
+        subject: String(data.get("subject") ?? "").trim(),
+        message: String(data.get("message") ?? "").trim(),
+        website: String(data.get("website") ?? ""),
+      },
+      { onSuccess: () => form.reset() },
+    );
+  }
+
+  return (
+    <div className="public-site">
+      <PublicHeader />
+      <main className="public-legal-page">
+        <p className="public-eyebrow">Nous contacter</p>
+        <h1>Parlons de votre projet.</h1>
+        <p className="public-legal-intro">
+          Envoyez-nous votre message. Il sera enregistré dans la boîte de réception
+          de l’équipe Mamari. Aucun e-mail de réponse automatique n’est envoyé pour le moment.
+        </p>
+        {contact.isSuccess ? (
+          <p className="public-contact-success" role="status">
+            <Check size={18} /> Votre message a bien été enregistré. Merci de nous avoir écrit.
+          </p>
+        ) : (
+          <form className="public-contact-form" onSubmit={submitContact}>
+            <label>
+              <span>Nom complet</span>
+              <input autoComplete="name" name="full_name" maxLength={160} minLength={2} required />
+            </label>
+            <label>
+              <span>Adresse e-mail</span>
+              <input autoComplete="email" name="email" type="email" maxLength={320} required />
+            </label>
+            <label>
+              <span>Objet</span>
+              <input name="subject" maxLength={160} minLength={2} required />
+            </label>
+            <label>
+              <span>Message</span>
+              <textarea name="message" rows={6} maxLength={5000} minLength={10} required />
+            </label>
+            <input className="public-honeypot" type="text" name="website" tabIndex={-1} autoComplete="off" aria-hidden="true" />
+            <label className="public-consent">
+              <input type="checkbox" required />
+              <span>J’accepte que Mamari utilise ces informations pour traiter ma demande.</span>
+            </label>
+            {contact.isError ? (
+              <p className="public-form-error" role="alert">{getApiErrorMessage(contact.error)}</p>
+            ) : null}
+            <button className="public-primary-link" type="submit" disabled={contact.isPending}>
+              {contact.isPending ? "Envoi en cours…" : "Envoyer le message"} <ArrowRight size={16} />
+            </button>
+          </form>
+        )}
+      </main>
+      <PublicFooter />
+    </div>
+  );
+}
+
+export function PublicLegalPage({ kind }: { kind: "privacy" | "sales" }) {
+  const privacy = kind === "privacy";
+  return (
+    <div className="public-site">
+      <PublicHeader />
+      <main className="public-legal-page">
+        <p className="public-eyebrow">Informations</p>
+        <h1>{privacy ? "Confidentialité" : "Conditions de vente"}</h1>
+        <p className="public-legal-draft" role="note">
+          Brouillon informatif — cette page doit être complétée et validée par l’entreprise
+          avant d’être considérée comme une information juridique définitive.
+        </p>
+        {privacy ? (
+          <>
+            <h2>Données recueillies</h2>
+            <p>
+              Lorsque vous utilisez le formulaire de contact ou vous inscrivez à la
+              newsletter, Mamari enregistre les informations que vous fournissez afin
+              de gérer votre demande ou votre inscription. L’inscription à la newsletter
+              repose sur votre consentement et peut être retirée via le lien de
+              désinscription disponible après une nouvelle inscription. Pour les
+              inscriptions antérieures, vous pouvez demander le retrait via le formulaire
+              de contact.
+            </p>
+            <h2>Destinataires et durée de conservation</h2>
+            <p>
+              Les demandes sont accessibles aux responsables autorisés de l’espace
+              Mamari. Les destinataires, sous-traitants, durées de conservation et
+              modalités d’exercice des droits doivent être précisés par l’entreprise
+              avant la mise en service définitive.
+            </p>
+            <h2>Contact et responsable du traitement</h2>
+            <p>
+              Le nom légal de l’entité, son adresse, l’identité du responsable du
+              traitement et les coordonnées de contact restent à compléter par Mamari.
+            </p>
+          </>
+        ) : (
+          <>
+            <h2>Commandes</h2>
+            <p>
+              Les commandes en ligne sont transmises à l’équipe Mamari, qui confirme
+              leur disponibilité et leurs modalités avant leur préparation. Le détail
+              des produits, prix, frais, livraison et moyens de paiement doit être
+              confirmé lors de la validation de chaque commande.
+            </p>
+            <h2>Annulation, livraison et réclamations</h2>
+            <p>
+              Les règles applicables à l’annulation, à la livraison, aux retours et aux
+              réclamations sont à confirmer par l’entreprise et doivent être publiées
+              avant d’être présentées comme des engagements contractuels.
+            </p>
+            <h2>Éditeur</h2>
+            <p>
+              La dénomination légale, l’adresse, les identifiants d’immatriculation et
+              les coordonnées de Mamari restent à fournir par l’entreprise.
+            </p>
+          </>
+        )}
+        <Link className="public-text-link" href="/contact">Une question ? Contactez-nous <ArrowRight size={15} /></Link>
       </main>
       <PublicFooter />
     </div>

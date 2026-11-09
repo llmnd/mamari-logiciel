@@ -13,6 +13,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from mamari_api.core.config import get_settings
 from mamari_api.modules.agriculture.models import Farm, FinanceTransaction
+from mamari_api.modules.audit.service import record_audit_event
 from mamari_api.modules.identity.dependencies import (
     CurrentMembership,
     SessionDep,
@@ -1247,6 +1248,7 @@ async def create_record(
                     organization_id=context.organization.id,
                     farm_id=farm_id,
                     created_by_id=context.user.id,
+                    source="livestock",
                     transaction_type="income" if data.record_type == "production" else "expense",
                     category="input" if data.record_type == "feed" else "other",
                     label=data.title,
@@ -1257,6 +1259,16 @@ async def create_record(
                     notes=data.notes,
                 )
             )
+    await record_audit_event(
+        session,
+        organization_id=context.organization.id,
+        actor_id=context.user.id,
+        module="livestock",
+        action="record_created",
+        entity_type="livestock_record",
+        entity_id=record.id,
+        summary=f"Enregistrement d’élevage ajouté : {record.title}.",
+    )
     try:
         await session.commit()
     except IntegrityError as error:

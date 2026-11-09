@@ -7,6 +7,7 @@ from sqlalchemy import func, select
 from sqlalchemy.exc import IntegrityError, SQLAlchemyError
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from mamari_api.modules.audit.service import record_audit_event
 from mamari_api.modules.identity.dependencies import (
     CurrentMembership,
     SessionDep,
@@ -66,6 +67,7 @@ async def _stock_item_response(session: AsyncSession, item: StockItem) -> StockI
         name=item.name,
         unit=item.unit,
         location=item.location,
+        minimum_quantity=item.minimum_quantity,
         balance=await get_stock_balance(session, item.organization_id, item.id),
         movement_count=movement_count or 0,
         created_at=item.created_at,
@@ -103,6 +105,7 @@ async def create_stock_item(
         name=data.name,
         unit=data.unit,
         location=data.location,
+        minimum_quantity=data.minimum_quantity,
     )
     session.add(item)
     try:
@@ -119,6 +122,16 @@ async def create_stock_item(
                 created_by_id=context.user.id,
                 note=data.note or "Inventaire physique initial",
             )
+        await record_audit_event(
+            session,
+            organization_id=context.organization.id,
+            actor_id=context.user.id,
+            module="stocks",
+            action="item_created",
+            entity_type="stock_item",
+            entity_id=item.id,
+            summary=f"Article de stock créé : {item.name}.",
+        )
         await session.commit()
         await session.refresh(item)
     except IntegrityError as error:
@@ -186,6 +199,7 @@ async def update_stock_item(
     item.source = data.source
     item.name = data.name
     item.location = data.location
+    item.minimum_quantity = data.minimum_quantity
     item.product_id = data.product_id
     try:
         await session.flush()
@@ -197,6 +211,16 @@ async def update_stock_item(
             )
         if data.product_id is not None and previous_product_id != data.product_id:
             await synchronize_product_stock(session, context.organization.id, item)
+        await record_audit_event(
+            session,
+            organization_id=context.organization.id,
+            actor_id=context.user.id,
+            module="stocks",
+            action="item_updated",
+            entity_type="stock_item",
+            entity_id=item.id,
+            summary=f"Article de stock modifié : {item.name}.",
+        )
         await session.commit()
         await session.refresh(item)
     except IntegrityError as error:
@@ -222,7 +246,7 @@ async def create_stock_movement(
     if context.membership.role == "operator" and data.movement_type == "adjustment":
         raise HTTPException(
             status_code=403,
-            detail="Seul un responsable peut effectuer un ajustement de stock.",
+            detail="Soumettez une demande d’ajustement pour validation par un responsable.",
         )
     item = await session.scalar(
         select(StockItem).where(
@@ -274,6 +298,16 @@ async def create_stock_movement(
         movement_date=data.movement_date,
         created_by_id=context.user.id,
         note=data.note,
+    )
+    await record_audit_event(
+        session,
+        organization_id=context.organization.id,
+        actor_id=context.user.id,
+        module="stocks",
+        action="movement_recorded",
+        entity_type="stock_item",
+        entity_id=item.id,
+        summary=f"Mouvement {data.movement_type} de {data.quantity} {item.unit} : {item.name}.",
     )
     await session.commit()
     await session.refresh(item)
@@ -347,6 +381,19 @@ async def transfer_stock(
             created_by_id=context.user.id,
             note=data.note,
             transfer_id=transfer_id,
+        )
+        await record_audit_event(
+            session,
+            organization_id=context.organization.id,
+            actor_id=context.user.id,
+            module="stocks",
+            action="stock_transferred",
+            entity_type="stock_item",
+            entity_id=source.id,
+            summary=(
+                f"Transfert de {data.quantity} {source.unit} : "
+                f"{source.location} vers {destination.location}."
+            ),
         )
         await record_stock_movement(
             session,

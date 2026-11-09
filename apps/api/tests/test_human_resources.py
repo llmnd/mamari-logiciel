@@ -166,8 +166,7 @@ async def test_payroll_payment_flows_to_finances_and_absences_need_approval(
         f"/api/v1/finance/summary?year={period['pay_year']}",
         headers=headers,
     )
-    assert summary_before_payment.status_code == 200
-    assert summary_before_payment.json()["expenses_fcfa"] == 0
+    assert summary_before_payment.status_code == 403
 
     absence_start = date.today() + timedelta(days=30)
     absence_end = absence_start + timedelta(days=4)
@@ -207,6 +206,12 @@ async def test_payroll_payment_flows_to_finances_and_absences_need_approval(
     assert reversed_dates.status_code == 422
 
     await login_as(client, "manager-absence")
+    summary_before_payment = await client.get(
+        f"/api/v1/finance/summary?year={period['pay_year']}",
+        headers=headers,
+    )
+    assert summary_before_payment.status_code == 200
+    assert summary_before_payment.json()["expenses_fcfa"] == 0
     manager_payroll = await client.get(
         f"/api/v1/human-resources/payroll?year={period['pay_year']}&month={period['pay_month']}",
         headers=headers,
@@ -261,11 +266,9 @@ async def test_payroll_payment_flows_to_finances_and_absences_need_approval(
         f"/api/v1/finance/transactions?year={period['pay_year']}&source=payroll",
         headers=headers,
     )
-    assert restricted_finances.status_code == 200, restricted_finances.text
-    assert restricted_finances.json()["total"] == 0
+    assert restricted_finances.status_code == 403
     private_summary = await client.get(
         f"/api/v1/finance/summary?year={period['pay_year']}",
         headers=headers,
     )
-    assert private_summary.status_code == 200
-    assert private_summary.json()["expenses_fcfa"] == 0
+    assert private_summary.status_code == 403

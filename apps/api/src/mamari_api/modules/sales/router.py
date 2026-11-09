@@ -12,6 +12,7 @@ from sqlalchemy.orm import selectinload
 
 from mamari_api.core.config import get_settings
 from mamari_api.modules.agriculture.models import FinanceTransaction
+from mamari_api.modules.audit.service import record_audit_event
 from mamari_api.modules.identity.dependencies import (
     CurrentMembership,
     CurrentUserDep,
@@ -778,9 +779,7 @@ async def create_store_order(
         amount_fcfa=amount_fcfa,
         status=OrderStatus.PENDING.value,
         items=order_items,
-        status_history=[
-            SalesOrderStatusEvent(status=OrderStatus.PENDING.value, actor_id=user.id)
-        ],
+        status_history=[SalesOrderStatusEvent(status=OrderStatus.PENDING.value, actor_id=user.id)],
     )
     session.add(order)
     try:
@@ -812,6 +811,16 @@ async def create_store_order(
                 reference_type="store_order_item",
                 reference_id=item.id,
             )
+        await record_audit_event(
+            session,
+            organization_id=organization.id,
+            actor_id=user.id,
+            module="sales",
+            action="order_created",
+            entity_type="sales_order",
+            entity_id=order.id,
+            summary=f"Commande {order.reference} enregistrée pour {order.customer_name}.",
+        )
         await session.commit()
     except HTTPException:
         await session.rollback()
@@ -1004,12 +1013,16 @@ async def read_my_store_profile(
             Organization.is_active.is_(True),
         )
     )
-    customer = await session.scalar(
-        select(Customer).where(
-            Customer.user_id == user.id,
-            Customer.organization_id == organization_id,
+    customer = (
+        await session.scalar(
+            select(Customer).where(
+                Customer.user_id == user.id,
+                Customer.organization_id == organization_id,
+            )
         )
-    ) if organization_id else None
+        if organization_id
+        else None
+    )
     if customer is None:
         raise HTTPException(
             status_code=403,
@@ -1039,12 +1052,16 @@ async def update_my_store_profile(
             Organization.is_active.is_(True),
         )
     )
-    customer = await session.scalar(
-        select(Customer).where(
-            Customer.user_id == user.id,
-            Customer.organization_id == organization_id,
+    customer = (
+        await session.scalar(
+            select(Customer).where(
+                Customer.user_id == user.id,
+                Customer.organization_id == organization_id,
+            )
         )
-    ) if organization_id else None
+        if organization_id
+        else None
+    )
     if customer is None:
         raise HTTPException(
             status_code=403,
@@ -1079,12 +1096,16 @@ async def cancel_my_store_order(
             Organization.is_active.is_(True),
         )
     )
-    customer_id = await session.scalar(
-        select(Customer.id).where(
-            Customer.user_id == user.id,
-            Customer.organization_id == organization_id,
+    customer_id = (
+        await session.scalar(
+            select(Customer.id).where(
+                Customer.user_id == user.id,
+                Customer.organization_id == organization_id,
+            )
         )
-    ) if organization_id else None
+        if organization_id
+        else None
+    )
     if organization_id is None or customer_id is None:
         raise HTTPException(
             status_code=403,
@@ -1147,6 +1168,16 @@ async def cancel_my_store_order(
     order.status = OrderStatus.CANCELLED.value
     order.status_history.append(
         SalesOrderStatusEvent(status=OrderStatus.CANCELLED.value, actor_id=user.id)
+    )
+    await record_audit_event(
+        session,
+        organization_id=organization_id,
+        actor_id=user.id,
+        module="sales",
+        action="order_cancelled",
+        entity_type="sales_order",
+        entity_id=order.id,
+        summary=f"Commande {order.reference} annulée par le client.",
     )
     await session.commit()
     await session.refresh(order)
@@ -1273,6 +1304,16 @@ async def create_order(
                 reference_type="sales_order_item",
                 reference_id=item.id,
             )
+        await record_audit_event(
+            session,
+            organization_id=context.organization.id,
+            actor_id=context.user.id,
+            module="sales",
+            action="order_created",
+            entity_type="sales_order",
+            entity_id=order.id,
+            summary=f"Commande {order.reference} enregistrée pour {order.customer_name}.",
+        )
         await session.commit()
     except HTTPException:
         await session.rollback()
@@ -1299,10 +1340,7 @@ async def update_order_status(
     session: SessionDep,
     context: CanOperateSalesDep,
 ) -> SalesOrderResponse:
-    if (
-        context.membership.role == "operator"
-        and data.status == OrderStatus.CANCELLED.value
-    ):
+    if context.membership.role == "operator" and data.status == OrderStatus.CANCELLED.value:
         raise HTTPException(
             status_code=403,
             detail="Seul un responsable peut annuler une commande.",
@@ -1362,9 +1400,22 @@ async def update_order_status(
                         reference_id=item.id,
                     )
     if order.status != data.status:
+        previous_status = order.status
         order.status = data.status
         order.status_history.append(
             SalesOrderStatusEvent(status=data.status, actor_id=context.user.id)
+        )
+        await record_audit_event(
+            session,
+            organization_id=context.organization.id,
+            actor_id=context.user.id,
+            module="sales",
+            action="order_status_changed",
+            entity_type="sales_order",
+            entity_id=order.id,
+            summary=(
+                f"Statut de la commande {order.reference} : {previous_status} → {data.status}."
+            ),
         )
     await session.commit()
     await session.refresh(order)

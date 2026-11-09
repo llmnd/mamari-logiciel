@@ -5,12 +5,15 @@ import { useQuery } from "@tanstack/react-query";
 import {
   ArrowRight,
   ArrowUpRight,
+  ClipboardList,
   CalendarDays,
   ChartArea,
   ChartColumnIncreasing,
   ChartSpline,
   CircleDollarSign,
   Flower2,
+  HeartPulse,
+  PackageX,
   Sprout,
   ShoppingBasket,
 } from "lucide-react";
@@ -273,6 +276,24 @@ export function DashboardPage() {
           detail: "exploitations suivies",
           icon: Flower2,
         },
+        {
+          label: "Tâches en retard",
+          value: value.overdue_task_count.toLocaleString("fr-FR"),
+          detail: `${value.open_task_count} tâche(s) à terminer`,
+          icon: ClipboardList,
+        },
+        {
+          label: "Soins en retard",
+          value: value.overdue_care_count.toLocaleString("fr-FR"),
+          detail: "échéances de santé non traitées",
+          icon: HeartPulse,
+        },
+        {
+          label: "À réapprovisionner",
+          value: value.restock_item_count.toLocaleString("fr-FR"),
+          detail: "articles avec un solde nul ou négatif",
+          icon: PackageX,
+        },
       ]
     : [];
   const currentYear = new Date().getFullYear();
@@ -288,7 +309,7 @@ export function DashboardPage() {
   return (
     <div className="dashboard-content">
       <section className="page-heading" aria-labelledby="dashboard-title">
-        <div>
+        <div className="dashboard-update">
           <p className="eyebrow">
             {new Intl.DateTimeFormat("fr-FR", {
               weekday: "long",
@@ -304,9 +325,11 @@ export function DashboardPage() {
             Les indicateurs ci-dessous sont calculés à partir des activités enregistrées.
           </p>
         </div>
-        <div className="date-chip">
-          <CalendarDays size={15} />
-          {value?.year ?? year}
+        <div>
+          <div className="date-chip">
+            <CalendarDays size={15} />
+            {value?.year ?? year}
+          </div>
         </div>
       </section>
 
@@ -433,6 +456,39 @@ export function DashboardPage() {
                   </p>
                   <Link className="module-back-link" href="/agriculture">
                     Voir les parcelles <ArrowRight size={14} />
+                  </Link>
+                </div>
+              ) : null}
+              {activeMetric?.label === "Tâches en retard" && value ? (
+                <div className="metric-explanation">
+                  <p>
+                    {value.overdue_task_count} tâche(s) ont dépassé leur échéance parmi les{" "}
+                    {value.open_task_count} tâche(s) encore à terminer.
+                  </p>
+                  <Link className="module-back-link" href="/operations">
+                    Ouvrir les opérations <ArrowRight size={14} />
+                  </Link>
+                </div>
+              ) : null}
+              {activeMetric?.label === "Soins en retard" && value ? (
+                <div className="metric-explanation">
+                  <p>
+                    {value.overdue_care_count} échéance(s) de santé sont dépassées et n’ont pas
+                    encore été marquées comme effectuées.
+                  </p>
+                  <Link className="module-back-link" href="/elevage">
+                    Ouvrir le suivi d’élevage <ArrowRight size={14} />
+                  </Link>
+                </div>
+              ) : null}
+              {activeMetric?.label === "À réapprovisionner" && value ? (
+                <div className="metric-explanation">
+                  <p>
+                    {value.restock_item_count} article(s) sont au niveau ou sous le seuil d’alerte
+                    configuré. Vérifiez leurs mouvements pour planifier un réapprovisionnement.
+                  </p>
+                  <Link className="module-back-link" href="/stocks">
+                    Voir les stocks <ArrowRight size={14} />
                   </Link>
                 </div>
               ) : null}

@@ -16,9 +16,11 @@ import {
   Coins,
   Contact,
   Factory,
+  FileSpreadsheet,
   Image as ImageIcon,
   LayoutDashboard,
   Leaf,
+  Mail,
   LoaderCircle,
   LogOut,
   Package,
@@ -39,6 +41,8 @@ import {
 
 const navigation = [
   { label: "Vue d'ensemble", href: "/dashboard", icon: LayoutDashboard },
+  { label: "Activité et approbations", href: "/activite", icon: Activity },
+  { label: "Rapports", href: "/rapports", icon: FileSpreadsheet },
   { label: "Opérations", href: "/operations", icon: ClipboardList },
   { label: "Agriculture", href: "/agriculture", icon: Leaf },
   { label: "Élevage", href: "/elevage", icon: Activity },
@@ -49,6 +53,7 @@ const navigation = [
   { label: "Finances", href: "/finances", icon: Coins },
   { label: "Ressources humaines", href: "/rh", icon: UsersRound },
   { label: "Communication", href: "/communication", icon: ImageIcon },
+  { label: "Messages et newsletter", href: "/messages", icon: Mail },
   { label: "Entreprise", href: "/entreprise", icon: Building2 },
   { label: "Administration", href: "/administration", icon: Settings2 },
 ];
@@ -66,6 +71,8 @@ function canAccessPath(role: OrganizationMembership["role"], pathname: string): 
   if (role === "manager") return pathname !== "/administration" && !pathname.startsWith("/administration/");
   return (
     pathname === "/dashboard" ||
+    pathname === "/activite" ||
+    pathname === "/rapports" ||
     pathname === "/agriculture" ||
     pathname === "/elevage" ||
     pathname === "/operations" ||
@@ -90,6 +97,9 @@ export function AppShell({ children }: Readonly<{ children: ReactNode }>) {
     pathname === "/produits" ||
     pathname === "/panier" ||
     pathname === "/qui-sommes-nous" ||
+    pathname === "/contact" ||
+    pathname === "/confidentialite" ||
+    pathname === "/conditions-de-vente" ||
     pathname === "/login" ||
     pathname === "/register";
   const isCustomerRoute = pathname === "/mon-compte";

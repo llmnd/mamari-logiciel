@@ -154,17 +154,48 @@ async def test_operator_campaign_responses_hide_financial_details(client: AsyncC
         json={"username": "agri-operator", "password": "secret6"},
     )
     assert login.status_code == 200
+    operator_campaign_payload = {
+        "parcel_id": parcel["id"],
+        "crop_id": crop["id"],
+        "name": "Campagne opérateur",
+        "season": "2026-Hivernage",
+        "start_date": "2026-06-01",
+        "expected_harvest_date": "2026-10-30",
+        "area_hectares": 2,
+        "expected_yield_kg_per_hectare": 1000,
+        "expected_price_fcfa_per_kg": 1000,
+        "estimated_input_cost_fcfa": 0,
+        "estimated_other_cost_fcfa": 0,
+    }
+    forbidden_campaign = await client.post(
+        "/api/v1/agriculture/campaigns",
+        headers=headers,
+        json=operator_campaign_payload,
+    )
+    assert forbidden_campaign.status_code == 403
+    operational_campaign = await client.post(
+        "/api/v1/agriculture/campaigns",
+        headers=headers,
+        json={
+            **operator_campaign_payload,
+            "expected_price_fcfa_per_kg": 0,
+        },
+    )
+    assert operational_campaign.status_code == 201, operational_campaign.text
+    assert operational_campaign.json()["expected_revenue_fcfa"] is None
 
     campaigns = await client.get("/api/v1/agriculture/campaigns", headers=headers)
     assert campaigns.status_code == 200
-    campaign = campaigns.json()["items"][0]
-    assert campaign["id"] == created_campaign.json()["id"]
-    assert float(campaign["expected_production_kg"]) == 2000
-    assert campaign["expected_revenue_fcfa"] is None
-    assert campaign["estimated_total_cost_fcfa"] is None
-    assert campaign["estimated_margin_fcfa"] is None
-    assert campaign["actual_revenue_fcfa"] is None
-    assert campaign["actual_expenses_fcfa"] is None
+    returned_campaigns = campaigns.json()["items"]
+    manager_campaign = next(
+        item for item in returned_campaigns if item["id"] == created_campaign.json()["id"]
+    )
+    assert float(manager_campaign["expected_production_kg"]) == 2000
+    assert manager_campaign["expected_revenue_fcfa"] is None
+    assert manager_campaign["estimated_total_cost_fcfa"] is None
+    assert manager_campaign["estimated_margin_fcfa"] is None
+    assert manager_campaign["actual_revenue_fcfa"] is None
+    assert manager_campaign["actual_expenses_fcfa"] is None
 
 
 @pytest.mark.asyncio

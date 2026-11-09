@@ -9,11 +9,13 @@ from sqlalchemy.ext.asyncio import async_engine_from_config
 from mamari_api.core.base import Base
 from mamari_api.core.config import get_settings
 from mamari_api.modules.agriculture import models as agriculture_models  # noqa: F401
+from mamari_api.modules.audit import models as audit_models  # noqa: F401
 from mamari_api.modules.communication import models as communication_models  # noqa: F401
 from mamari_api.modules.human_resources import models as human_resources_models  # noqa: F401
 from mamari_api.modules.identity import models as identity_models  # noqa: F401
 from mamari_api.modules.livestock import models as livestock_models  # noqa: F401
 from mamari_api.modules.operations import models as operations_models  # noqa: F401
+from mamari_api.modules.public_site import models as public_site_models  # noqa: F401
 from mamari_api.modules.sales import models as sales_models  # noqa: F401
 from mamari_api.modules.stocks import models as stocks_models  # noqa: F401
 

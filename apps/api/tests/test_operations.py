@@ -15,6 +15,77 @@ async def admin_organization(client: AsyncClient) -> str:
 
 
 @pytest.mark.asyncio
+async def test_dashboard_summarizes_operational_alerts(client: AsyncClient) -> None:
+    organization_id = await admin_organization(client)
+    headers = {"X-Organization-ID": organization_id}
+    overdue_task = await client.post(
+        "/api/v1/operations/tasks",
+        headers=headers,
+        json={
+            "title": "Traiter la commande en retard",
+            "due_date": (date.today() - timedelta(days=1)).isoformat(),
+        },
+    )
+    upcoming_task = await client.post(
+        "/api/v1/operations/tasks",
+        headers=headers,
+        json={
+            "title": "Préparer le prochain inventaire",
+            "due_date": (date.today() + timedelta(days=2)).isoformat(),
+        },
+    )
+    animal = await client.post(
+        "/api/v1/livestock/animals",
+        headers=headers,
+        json={"name": "Awa", "species": "Caprin"},
+    )
+    overdue_care = await client.post(
+        "/api/v1/livestock/records",
+        headers=headers,
+        json={
+            "record_type": "health",
+            "category": "checkup",
+            "title": "Contrôle vétérinaire",
+            "animal_id": animal.json()["id"],
+            "next_due_date": (date.today() - timedelta(days=1)).isoformat(),
+        },
+    )
+    empty_stock = await client.post(
+        "/api/v1/stocks/items",
+        headers=headers,
+        json={
+            "source": "other",
+            "name": "Réserve vide",
+            "unit": "kg",
+            "minimum_quantity": 1,
+        },
+    )
+    stocked_item = await client.post(
+        "/api/v1/stocks/items",
+        headers=headers,
+        json={
+            "source": "other",
+            "name": "Réserve disponible",
+            "unit": "kg",
+            "opening_quantity": 10,
+        },
+    )
+    assert overdue_task.status_code == 201
+    assert upcoming_task.status_code == 201
+    assert animal.status_code == 201
+    assert overdue_care.status_code == 201
+    assert empty_stock.status_code == 201
+    assert stocked_item.status_code == 201
+
+    dashboard = await client.get("/api/v1/dashboard/overview", headers=headers)
+    assert dashboard.status_code == 200
+    assert dashboard.json()["open_task_count"] == 2
+    assert dashboard.json()["overdue_task_count"] == 1
+    assert dashboard.json()["overdue_care_count"] == 1
+    assert dashboard.json()["restock_item_count"] == 1
+
+
+@pytest.mark.asyncio
 async def test_tasks_can_be_planned_assigned_searched_and_completed(
     client: AsyncClient,
 ) -> None:

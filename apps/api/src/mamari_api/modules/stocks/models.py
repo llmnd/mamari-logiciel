@@ -42,6 +42,7 @@ class StockItem(Base):
     name: Mapped[str] = mapped_column(String(160), nullable=False)
     unit: Mapped[str] = mapped_column(String(40), nullable=False)
     location: Mapped[str] = mapped_column(String(120), nullable=False, default="Magasin")
+    minimum_quantity: Mapped[Decimal | None] = mapped_column(Numeric(14, 3), nullable=True)
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True), default=lambda: datetime.now(UTC), nullable=False
     )

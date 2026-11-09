@@ -8,6 +8,10 @@ export interface DashboardOverview {
   pending_order_count: number;
   customer_count: number;
   average_order_fcfa: number | null;
+  open_task_count: number;
+  overdue_task_count: number;
+  overdue_care_count: number;
+  restock_item_count: number;
   production_kg: number;
   harvest_count: number;
   parcel_count: number;
@@ -52,6 +56,10 @@ export function isDashboardOverview(value: unknown): value is DashboardOverview 
     "order_count",
     "pending_order_count",
     "customer_count",
+    "open_task_count",
+    "overdue_task_count",
+    "overdue_care_count",
+    "restock_item_count",
     "production_kg",
     "harvest_count",
     "parcel_count",
