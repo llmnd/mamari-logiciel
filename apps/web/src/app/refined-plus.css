@@ -38,6 +38,8 @@
 
 .page-heading { align-items: center; }
 
+.metrics-grid > .metric-card:last-child:nth-child(7) { grid-column: span 2; }
+
 /* ---------- Agriculture : en-tête ---------- */
 .agriculture-workspace { gap: 28px; }
 

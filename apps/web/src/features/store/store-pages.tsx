@@ -46,9 +46,9 @@ const storeProductsQueryKey = ["store", "products"];
 /* ------------------------------------------------------------------ */
 function PublicHeader() {
   const { cart } = useShopCart();
-  const profile = useQuery({
-    queryKey: ["auth", "me"],
-    queryFn: () => apiRequest<UserProfile>("/auth/me"),
+  const session = useQuery({
+    queryKey: ["auth", "public-status"],
+    queryFn: () => apiRequest<{ customer_account: boolean }>("/auth/public-status"),
     retry: false,
   });
   const cartCount = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
@@ -113,9 +113,9 @@ function PublicHeader() {
             </Link>
             <Link
               className="public-login-link"
-              href={profile.data?.customer_account ? "/mon-compte" : "/login"}
+              href={session.data?.customer_account ? "/mon-compte" : "/login"}
             >
-              {profile.data?.customer_account ? "Mon compte" : "Connexion"} <ArrowRight size={14} />
+              {session.data?.customer_account ? "Mon compte" : "Connexion"} <ArrowRight size={14} />
             </Link>
           </span>
         </nav>

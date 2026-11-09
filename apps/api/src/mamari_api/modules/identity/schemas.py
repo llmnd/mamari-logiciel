@@ -109,6 +109,10 @@ class UserResponse(BaseModel):
     customer_account: bool = False
 
 
+class PublicAuthStatusResponse(BaseModel):
+    customer_account: bool
+
+
 class OrganizationUserResponse(BaseModel):
     id: uuid.UUID
     username: str

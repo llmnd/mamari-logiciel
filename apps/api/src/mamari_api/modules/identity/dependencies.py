@@ -40,6 +40,27 @@ async def get_current_user(
 CurrentUserDep = Annotated[User, Depends(get_current_user)]
 
 
+async def get_optional_current_user(
+    session: SessionDep,
+    access_token: Annotated[str | None, Cookie()] = None,
+) -> User | None:
+    if access_token is None:
+        return None
+
+    try:
+        user_id = decode_access_token(access_token)
+    except (jwt.InvalidTokenError, ValueError):
+        return None
+
+    user = await session.get(User, user_id)
+    if user is None or not user.is_active:
+        return None
+    return user
+
+
+OptionalCurrentUserDep = Annotated[User | None, Depends(get_optional_current_user)]
+
+
 class CurrentMembership:
     def __init__(self, user: User, organization: Organization, membership: Membership) -> None:
         self.user = user

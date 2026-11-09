@@ -52,6 +52,35 @@ async def test_login_and_logout_manage_the_session(client: AsyncClient) -> None:
 
 
 @pytest.mark.asyncio
+async def test_public_auth_status_is_safe_for_anonymous_visitors(
+    client: AsyncClient,
+) -> None:
+    anonymous = await client.get("/api/v1/auth/public-status")
+    assert anonymous.status_code == 200
+    assert anonymous.json() == {"customer_account": False}
+
+    client.cookies.set("access_token", "invalid-token")
+    invalid_session = await client.get("/api/v1/auth/public-status")
+    assert invalid_session.status_code == 200
+    assert invalid_session.json() == {"customer_account": False}
+    client.cookies.clear()
+
+    registration = await client.post(
+        "/api/v1/auth/customer/register",
+        json={
+            "full_name": "Client public",
+            "phone": "771234567",
+            "email": "public-status-client@example.com",
+            "password": "clientpass",
+        },
+    )
+    assert registration.status_code == 201
+    authenticated_customer = await client.get("/api/v1/auth/public-status")
+    assert authenticated_customer.status_code == 200
+    assert authenticated_customer.json() == {"customer_account": True}
+
+
+@pytest.mark.asyncio
 async def test_admin_employee_and_customer_can_change_their_password(
     client: AsyncClient,
 ) -> None:

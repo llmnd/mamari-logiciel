@@ -352,7 +352,10 @@ export function DashboardPage() {
 
       {value ? (
         <>
-          <section className="metrics-grid" aria-label="Indicateurs réels de l’entreprise">
+          <section
+            className="metrics-grid"
+            aria-label="Indicateurs réels de l’entreprise"
+          >
             {metrics.map((metric) => {
               const Icon = metric.icon;
               return (

@@ -9,6 +9,7 @@ from mamari_api.core.config import get_settings
 from mamari_api.modules.identity.dependencies import (
     CurrentMembership,
     CurrentUserDep,
+    OptionalCurrentUserDep,
     SessionDep,
     get_current_membership,
 )
@@ -19,6 +20,7 @@ from mamari_api.modules.identity.schemas import (
     LoginRequest,
     MembershipResponse,
     MessageResponse,
+    PublicAuthStatusResponse,
     UpdateCurrentUserRequest,
     UserResponse,
 )
@@ -174,6 +176,26 @@ async def logout(response: Response) -> MessageResponse:
 @router.get("/me", response_model=UserResponse, summary="Consulter le compte connecté")
 async def read_current_user(session: SessionDep, user: CurrentUserDep) -> UserResponse:
     return await user_response(session, user)
+
+
+@router.get("/public-status", response_model=PublicAuthStatusResponse)
+async def read_public_auth_status(
+    session: SessionDep,
+    user: OptionalCurrentUserDep,
+) -> PublicAuthStatusResponse:
+    if user is None:
+        return PublicAuthStatusResponse(customer_account=False)
+    customer_account = await session.scalar(
+        select(Customer.id)
+        .join(Organization, Organization.id == Customer.organization_id)
+        .where(
+            Customer.user_id == user.id,
+            Organization.slug == get_settings().public_store_slug,
+            Organization.is_active.is_(True),
+        )
+        .limit(1)
+    )
+    return PublicAuthStatusResponse(customer_account=customer_account is not None)
 
 
 @router.patch(
