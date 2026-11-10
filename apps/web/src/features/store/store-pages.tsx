@@ -1827,17 +1827,17 @@ export function CartPage() {
               </strong>
             </div>
             <div className="checkout-complete-summary">
-              <span>Total estimé</span>
-              <strong>
+              <span>{completedOrder.delivery_quote_required ? "Total provisoire" : "Total avec livraison"}</span>
+              <strong className={completedOrder.delivery_quote_required ? "is-provisional" : undefined}>
                 {completedOrder.delivery_quote_required
-                  ? "Frais à confirmer"
+                  ? `${formatFcfa(completedOrder.amount_fcfa)} + livraison à confirmer`
                   : formatFcfa(
                       completedOrder.amount_fcfa + (completedOrder.delivery_fee_fcfa ?? 0),
                     )}
               </strong>
             </div>
             {completedOrder.delivery_quote_required ? (
-              <p className="checkout-delivery-warning">Les frais de livraison seront confirmés par notre équipe avant validation définitive.</p>
+              <p className="checkout-delivery-warning">Le montant des produits est connu. Notre équipe vous communiquera le total final après confirmation des frais de livraison.</p>
             ) : null}
             <Link className="button-primary checkout-home-link" href="/produits">
               Retour à la boutique <ArrowRight size={16} />
@@ -2037,13 +2037,21 @@ export function CartPage() {
                   </strong>
                 </div>
                 <div className="checkout-summary-total">
-                  <span>Total estimé</span>
-                  <strong>
-                    {formatFcfa(total + (deliverySelection?.quote.fee_fcfa ?? 0))}
+                  <span>
+                    {deliverySelection && !deliverySelection.quote.quote_required
+                      ? "Total avec livraison"
+                      : "Total provisoire"}
+                  </span>
+                  <strong className={!deliverySelection || deliverySelection.quote.quote_required ? "is-provisional" : undefined}>
+                    {!deliverySelection
+                      ? `${formatFcfa(total)} + livraison à calculer`
+                      : deliverySelection.quote.quote_required
+                        ? `${formatFcfa(total)} + livraison à confirmer`
+                        : formatFcfa(total + (deliverySelection.quote.fee_fcfa ?? 0))}
                   </strong>
                 </div>
                 {deliverySelection?.quote.quote_required ? (
-                  <p className="checkout-delivery-warning">Hors zone : les frais ne sont pas inclus dans le total estimé.</p>
+                  <p className="checkout-delivery-warning">Le montant des produits est connu. Le total final sera communiqué après confirmation des frais de livraison.</p>
                 ) : null}
                 <p><ShieldCheck size={14} /> Vous pourrez confirmer les détails avec notre équipe.</p>
               </aside>

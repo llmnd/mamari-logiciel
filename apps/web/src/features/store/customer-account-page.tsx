@@ -682,15 +682,15 @@ export function CustomerAccountPage() {
                         </strong>
                       </div>
                       <div className="customer-order-total">
-                        <span>Total estimé</span>
-                        <strong>
+                        <span>{order.delivery_quote_required ? "Total provisoire" : "Total avec livraison"}</span>
+                        <strong className={order.delivery_quote_required ? "is-provisional" : undefined}>
                           {order.delivery_quote_required
-                            ? "Frais à confirmer"
+                            ? `${formatFcfa(order.amount_fcfa)} + livraison à confirmer`
                             : formatFcfa(order.amount_fcfa + (order.delivery_fee_fcfa ?? 0))}
                         </strong>
                       </div>
                       {order.delivery_quote_required ? (
-                        <p className="checkout-delivery-warning">Les frais de livraison seront confirmés par notre équipe.</p>
+                        <p className="checkout-delivery-warning">Le montant des produits est connu. Notre équipe vous communiquera le total final après confirmation des frais de livraison.</p>
                       ) : null}
                       <div className="customer-order-actions">
                         <button
