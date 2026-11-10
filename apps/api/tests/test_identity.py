@@ -65,6 +65,13 @@ async def test_public_auth_status_is_safe_for_anonymous_visitors(
     assert invalid_session.json() == {"customer_account": False}
     client.cookies.clear()
 
+    bootstrap = await client.post(
+        "/api/v1/auth/login",
+        json={"username": "mamari", "password": "passer123m"},
+    )
+    assert bootstrap.status_code == 200
+    client.cookies.clear()
+
     registration = await client.post(
         "/api/v1/auth/customer/register",
         json={
@@ -74,7 +81,7 @@ async def test_public_auth_status_is_safe_for_anonymous_visitors(
             "password": "clientpass",
         },
     )
-    assert registration.status_code == 201
+    assert registration.status_code == 201, registration.text
     authenticated_customer = await client.get("/api/v1/auth/public-status")
     assert authenticated_customer.status_code == 200
     assert authenticated_customer.json() == {"customer_account": True}

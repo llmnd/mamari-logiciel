@@ -12,6 +12,7 @@ import {
   ChevronRight,
   Leaf,
   LoaderCircle,
+  Menu,
   Minus,
   Plus,
   Search,
@@ -23,6 +24,7 @@ import {
   Wheat,
   Truck,
   Sun,
+  X,
   CalendarDays,
   Users,
 } from "lucide-react";
@@ -54,6 +56,7 @@ function PublicHeader() {
   const cartCount = Object.values(cart).reduce((total, quantity) => total + quantity, 0);
   const [scrolled, setScrolled] = useState(false);
   const [showTop, setShowTop] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
   const lenisRef = useRef<Lenis | null>(null);
 
   useEffect(() => {
@@ -77,6 +80,15 @@ function PublicHeader() {
       lenisRef.current = null;
     };
   }, []);
+
+  useEffect(() => {
+    if (!mobileMenuOpen) return;
+    function closeOnEscape(event: KeyboardEvent) {
+      if (event.key === "Escape") setMobileMenuOpen(false);
+    }
+    window.addEventListener("keydown", closeOnEscape);
+    return () => window.removeEventListener("keydown", closeOnEscape);
+  }, [mobileMenuOpen]);
 
   function scrollToTop() {
     if (lenisRef.current) {
@@ -117,8 +129,43 @@ function PublicHeader() {
             >
               {session.data?.customer_account ? "Mon compte" : "Connexion"} <ArrowRight size={14} />
             </Link>
+            <button
+              className="public-menu-toggle"
+              type="button"
+              aria-label={mobileMenuOpen ? "Fermer le menu" : "Ouvrir le menu"}
+              aria-expanded={mobileMenuOpen}
+              aria-controls="public-mobile-menu"
+              onClick={() => setMobileMenuOpen((open) => !open)}
+            >
+              {mobileMenuOpen ? <X size={20} /> : <Menu size={20} />}
+            </button>
           </span>
         </nav>
+        {mobileMenuOpen ? (
+          <nav
+            className="public-mobile-menu"
+            id="public-mobile-menu"
+            aria-label="Navigation mobile"
+          >
+            <Link href="/#activites" onClick={() => setMobileMenuOpen(false)}>Nos activités</Link>
+            <Link href="/qui-sommes-nous" onClick={() => setMobileMenuOpen(false)}>Qui sommes-nous ?</Link>
+            <Link href="/produits" onClick={() => setMobileMenuOpen(false)}>La boutique</Link>
+            <Link href="/contact" onClick={() => setMobileMenuOpen(false)}>Nous contacter</Link>
+            <Link href="/confidentialite" onClick={() => setMobileMenuOpen(false)}>Confidentialité</Link>
+            <Link href="/conditions-de-vente" onClick={() => setMobileMenuOpen(false)}>Conditions de vente</Link>
+            <Link href="/panier" onClick={() => setMobileMenuOpen(false)}>
+              Panier{cartCount ? ` (${cartCount})` : ""}
+            </Link>
+            <Link
+              className="public-mobile-menu-account"
+              href={session.data?.customer_account ? "/mon-compte" : "/login"}
+              onClick={() => setMobileMenuOpen(false)}
+            >
+              {session.data?.customer_account ? "Mon compte" : "Connexion"}
+              <ArrowRight size={15} />
+            </Link>
+          </nav>
+        ) : null}
       </header>
       <button
         className={`public-top-button${showTop ? " is-visible" : ""}`}
