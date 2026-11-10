@@ -42,6 +42,26 @@ import { useProductPhoto } from "./use-product-photo";
 import type { UserProfile } from "@/lib/api/client";
 
 const storeProductsQueryKey = ["store", "products"];
+type ShopCartSetter = ReturnType<typeof useShopCart>["setCart"];
+
+function changeProductQuantity(
+  setCart: ShopCartSetter,
+  product: StoreProduct,
+  adjustment: number,
+) {
+  setCart((current) => {
+    const next = Math.min(
+      (current[product.id] ?? 0) + adjustment,
+      product.stock_quantity,
+    );
+    if (next < 1) {
+      const remaining = { ...current };
+      delete remaining[product.id];
+      return remaining;
+    }
+    return { ...current, [product.id]: next };
+  });
+}
 
 /* ------------------------------------------------------------------ */
 /*  HEADER                                                             */
@@ -372,6 +392,7 @@ function FaqSection() {
 /*  HOME                                                               */
 /* ------------------------------------------------------------------ */
 export function PublicHomePage() {
+  const { cart, setCart } = useShopCart();
   const products = useQuery({
     queryKey: storeProductsQueryKey,
     queryFn: () => apiRequest<StoreProductPage>("/store/products"),
@@ -399,6 +420,14 @@ export function PublicHomePage() {
       }),
   });
   const unsubscribeToken = newsletter.data?.unsubscribe_token;
+
+  function addProduct(product: StoreProduct) {
+    changeProductQuantity(setCart, product, 1);
+  }
+
+  function removeProduct(product: StoreProduct) {
+    changeProductQuantity(setCart, product, -1);
+  }
 
   function handleNewsletter(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
@@ -431,8 +460,8 @@ export function PublicHomePage() {
                 <Link className="public-primary-link" href="/produits">
                   Découvrir nos produits <ArrowRight size={17} />
                 </Link>
-                <Link className="public-hero-story-link" href="/qui-sommes-nous">
-                  Notre histoire
+                <Link className="public-hero-story-link" href="#activites">
+                  Explorer nos activités <ArrowRight size={14} />
                 </Link>
               </div>
               <p className="public-hero-meta">
@@ -633,7 +662,13 @@ export function PublicHomePage() {
           ) : featuredProducts.length ? (
             <div className="store-product-grid">
               {featuredProducts.map((product) => (
-                <StoreProductCard key={product.id} product={product} />
+                <StoreProductCard
+                  key={product.id}
+                  product={product}
+                  quantity={cart[product.id] ?? 0}
+                  onAdd={addProduct}
+                  onRemove={removeProduct}
+                />
               ))}
             </div>
           ) : (
@@ -1143,22 +1178,11 @@ export function StorePage() {
   );
 
   function addProduct(product: StoreProduct) {
-    setCart((current) => ({
-      ...current,
-      [product.id]: Math.min((current[product.id] ?? 0) + 1, product.stock_quantity),
-    }));
+    changeProductQuantity(setCart, product, 1);
   }
 
   function removeProduct(product: StoreProduct) {
-    setCart((current) => {
-      const next = (current[product.id] ?? 0) - 1;
-      if (next < 1) {
-        const remaining = { ...current };
-        delete remaining[product.id];
-        return remaining;
-      }
-      return { ...current, [product.id]: next };
-    });
+    changeProductQuantity(setCart, product, -1);
   }
 
   function resetFilters() {

@@ -509,9 +509,9 @@
 
 /* ---------- Responsive ---------- */
 @media (max-width: 1100px) {
-  .public-hero-photo { grid-template-columns: minmax(0, 1fr); gap: 36px; padding: 48px 36px 96px; }
+  .public-hero-photo { min-height: 0; grid-template-columns: minmax(0, 1fr); gap: 36px; padding: 48px 36px 72px; }
   .public-hero-copy { width: min(100%, 680px); }
-  .public-hero-collage { height: clamp(420px, 62vw, 560px); }
+  .public-hero-collage { height: clamp(340px, 48vw, 500px); }
   .public-story,
   .public-newsletter-inner { grid-template-columns: minmax(0, 1fr); }
   .public-story { padding: 0 0 56px; }
@@ -657,11 +657,14 @@
   .public-navigation .public-login-link { min-height: 42px; padding: 0 15px; font-size: 13px; }
 
   .public-hero { padding: 8px 8px 0; }
-  .public-hero-photo { gap: 28px; border-radius: 30px; padding: 36px 22px 84px; }
-  .public-hero-copy h1 { margin: 18px 0; font-size: clamp(50px, 14vw, 68px); }
-  .public-hero-copy > p:not(.public-eyebrow) { font-size: 16px; }
-  .public-hero-collage { height: auto; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: 300px 130px; gap: 10px; }
-  .public-hero-collage { grid-template-rows: 390px 130px; }
+  .public-hero-photo { gap: 20px; border-radius: 30px; padding: 30px 20px 44px; }
+  .public-hero-copy h1 { margin: 16px 0; font-size: clamp(48px, 13vw, 62px); }
+  .public-hero-copy > p:not(.public-eyebrow) { font-size: 15px; }
+  .public-hero-actions { gap: 8px 16px; margin-top: 20px; }
+  .public-hero-actions .public-primary-link { min-height: 50px; margin-top: 0; padding: 0 20px; font-size: 14px; }
+  .public-hero-story-link { min-height: 44px; margin-top: 0; }
+  .public-hero-copy > p.public-hero-meta { margin-top: 18px; font-size: 12px; }
+  .public-hero-collage { height: auto; grid-template-columns: repeat(6, minmax(0, 1fr)); grid-template-rows: 220px 74px; gap: 8px; }
   .public-hero-image-horses { grid-column: 1 / 7; grid-row: 1; border-radius: 24px 110px 24px 24px; }
   .public-hero-image-pasture { grid-column: 1 / 3; grid-row: 2; border-radius: 24px; }
   .public-hero-image-cows { grid-column: 3 / 5; grid-row: 2; border-radius: 18px; }
