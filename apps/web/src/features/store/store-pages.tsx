@@ -419,6 +419,33 @@ const faqItems = [
   },
 ];
 
+const journeyStages = [
+  {
+    title: "Semer",
+    label: "La terre",
+    description: "Nous préparons la terre et semons au bon moment.",
+    icon: <Sprout size={24} />,
+  },
+  {
+    title: "Cultiver",
+    label: "La croissance",
+    description: "Les cultures grandissent au rythme des saisons et font l’objet d’un suivi attentif.",
+    icon: <Wheat size={24} />,
+  },
+  {
+    title: "Récolter",
+    label: "La récolte",
+    description: "Les récoltes sont préparées avec soin, au fil des saisons.",
+    icon: <Sun size={24} />,
+  },
+  {
+    title: "Partager",
+    label: "À votre table",
+    description: "Les produits sélectionnés rejoignent votre quotidien.",
+    icon: <Truck size={24} />,
+  },
+];
+
 function FaqSection() {
   return (
     <section className="public-section public-faq">
@@ -449,6 +476,7 @@ function FaqSection() {
 /* ------------------------------------------------------------------ */
 export function PublicHomePage() {
   const { cart, setCart } = useShopCart();
+  const [journeyStep, setJourneyStep] = useState(0);
   const products = useQuery({
     queryKey: storeProductsQueryKey,
     queryFn: () => apiRequest<StoreProductPage>("/store/products"),
@@ -476,6 +504,11 @@ export function PublicHomePage() {
       }),
   });
   const unsubscribeToken = newsletter.data?.unsubscribe_token;
+  const currentJourneyStage = journeyStages[journeyStep];
+
+  function advanceJourney() {
+    setJourneyStep((current) => (current + 1) % journeyStages.length);
+  }
 
   function addProduct(product: StoreProduct) {
     changeProductQuantity(setCart, product, 1);
@@ -735,40 +768,61 @@ export function PublicHomePage() {
           )}
         </section>
 
-        {/* ---------- DÉMARCHE ---------- */}
-        <section className="public-section public-process">
+        {/* ---------- PARCOURS INTERACTIF ---------- */}
+        <section className="public-section public-journey" id="parcours">
           <div className="public-section-heading">
             <div>
-              <p className="public-eyebrow">Notre démarche</p>
+              <p className="public-eyebrow">Une histoire à parcourir</p>
               <h2>Du champ à votre table.</h2>
             </div>
-            <p>Chaque étape est menée avec soin, dans le respect du vivant et des saisons.</p>
+            <p>Suivez les grandes étapes de notre parcours, de la terre jusqu’aux produits à partager.</p>
           </div>
-          <div className="public-process-grid">
-            <article>
-              <span className="public-process-number">01</span>
-              <span className="public-process-icon"><Sprout size={22} /></span>
-              <h3>Semer</h3>
-              <p>Nous préparons la terre et semons au bon moment.</p>
-            </article>
-            <article>
-              <span className="public-process-number">02</span>
-              <span className="public-process-icon"><Wheat size={22} /></span>
-              <h3>Cultiver</h3>
-              <p>Un suivi quotidien, sans compromis sur la qualité.</p>
-            </article>
-            <article>
-              <span className="public-process-number">03</span>
-              <span className="public-process-icon"><Sun size={22} /></span>
-              <h3>Récolter</h3>
-              <p>À pleine maturité, pour des saveurs authentiques.</p>
-            </article>
-            <article>
-              <span className="public-process-number">04</span>
-              <span className="public-process-icon"><Truck size={22} /></span>
-              <h3>Partager</h3>
-              <p>Livré chez vous, frais et prêt à savourer.</p>
-            </article>
+          <div className="public-journey-card">
+            <div className="public-journey-stepper" role="group" aria-label="Étapes du parcours">
+              <div className="public-journey-track" aria-hidden="true">
+                <span style={{ width: `${(journeyStep / (journeyStages.length - 1)) * 100}%` }} />
+              </div>
+              {journeyStages.map((stage, index) => (
+                <button
+                  aria-pressed={journeyStep === index}
+                  className={`public-journey-step${journeyStep === index ? " is-active" : ""}${journeyStep > index ? " is-complete" : ""}`}
+                  key={stage.title}
+                  onClick={() => setJourneyStep(index)}
+                  type="button"
+                >
+                  <span className="public-journey-step-icon">{journeyStep > index ? <Check size={18} /> : stage.icon}</span>
+                  <span className="public-journey-step-label">{stage.title}</span>
+                </button>
+              ))}
+            </div>
+            <div className="public-journey-content" aria-live="polite">
+              <div className={`public-journey-artwork stage-${journeyStep}`} aria-hidden="true">
+                <span className="public-journey-sun" />
+                <span className="public-journey-horizon" />
+                <span className="public-journey-field field-back" />
+                <span className="public-journey-field field-front" />
+                <span className="public-journey-art-icon">{currentJourneyStage.icon}</span>
+                <span className="public-journey-art-caption">{currentJourneyStage.label}</span>
+              </div>
+              <div className="public-journey-copy">
+                <p className="public-eyebrow">Étape {String(journeyStep + 1).padStart(2, "0")} · {currentJourneyStage.label}</p>
+                <h3>{currentJourneyStage.title}</h3>
+                <p>{currentJourneyStage.description}</p>
+                {journeyStep === journeyStages.length - 1 ? (
+                  <Link className="public-journey-shop-link" href="/produits">
+                    Découvrir les produits <ArrowRight size={16} />
+                  </Link>
+                ) : null}
+                <div className="public-journey-controls">
+                  <span>{journeyStep + 1} / {journeyStages.length}</span>
+                  <button className="public-journey-next" onClick={advanceJourney} type="button">
+                    {journeyStep === journeyStages.length - 1 ? "Revoir le parcours" : "Étape suivante"}
+                    <ArrowRight size={16} />
+                  </button>
+                </div>
+              </div>
+            </div>
+            <p className="public-journey-note">Un aperçu illustratif : les étapes varient selon les produits et les saisons.</p>
           </div>
         </section>
 
