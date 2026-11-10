@@ -139,6 +139,12 @@ n’a été enregistrée.
   alimentation. Les bâtiments rattachés à une ferme ajoutent automatiquement
   les coûts aux Finances et les recettes de production aux revenus. Les médias
   privés sont stockés sous `UPLOAD_DIRECTORY` et limités à 5 Mo.
+- La boutique estime les frais de livraison à vol d’oiseau depuis les coordonnées
+  de référence définies dans `.env` : gratuit jusqu’à 5 km, 1 000 FCFA jusqu’à
+  15 km, 2 000 FCFA jusqu’à 30 km, puis tarif à confirmer. Ces seuils sont
+  temporaires et doivent être remplacés par l’adresse et les tarifs validés par
+  Mamari avant la mise en production. La recherche d’adresse utilise le service
+  Nominatim d’OpenStreetMap à la demande (sans autocomplétion).
 - La migration `0010_operations_collaborators` ajoute les profils des membres,
   les comptes rendus des tâches et leur historique.
 - Avant d’exposer le serveur sur Internet, remplacer `BOOTSTRAP_ADMIN_PASSWORD`

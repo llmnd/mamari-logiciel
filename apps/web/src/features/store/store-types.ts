@@ -25,6 +25,11 @@ export interface StoreOrder {
   customer_phone: string | null;
   customer_email: string | null;
   delivery_address: string | null;
+  delivery_latitude: number | null;
+  delivery_longitude: number | null;
+  delivery_distance_km: number | null;
+  delivery_fee_fcfa: number | null;
+  delivery_quote_required: boolean;
   order_date: string;
   amount_fcfa: number;
   status: "pending" | "confirmed" | "preparing" | "delivered" | "cancelled";

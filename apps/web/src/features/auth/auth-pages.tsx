@@ -115,6 +115,7 @@ export function LoginPage() {
           password: formData.get("password")?.toString(),
         }),
       });
+      await queryClient.cancelQueries({ queryKey: ["auth", "me"], exact: true });
       queryClient.setQueryData(["auth", "me"], profile);
       const requestedPath = new URLSearchParams(window.location.search).get("next");
       const requestedDestination =
@@ -206,6 +207,7 @@ export function CustomerRegisterPage() {
           password: formData.get("password")?.toString(),
         }),
       });
+      await queryClient.cancelQueries({ queryKey: ["auth", "me"], exact: true });
       queryClient.setQueryData(["auth", "me"], profile);
       const requestedPath = new URLSearchParams(window.location.search).get("next");
       router.replace(requestedPath === "/panier" ? "/panier" : "/mon-compte");

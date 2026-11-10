@@ -86,6 +86,11 @@ class SalesOrderResponse(BaseModel):
     customer_phone: str | None
     customer_email: str | None
     delivery_address: str | None
+    delivery_latitude: float | None = None
+    delivery_longitude: float | None = None
+    delivery_distance_km: float | None = None
+    delivery_fee_fcfa: int | None = 0
+    delivery_quote_required: bool = False
     order_date: date
     amount_fcfa: int
     status: OrderState
@@ -158,14 +163,24 @@ class StoreProductPageResponse(BaseModel):
 
 
 class CreateStoreOrderRequest(BaseModel):
-    delivery_address: (
-        Annotated[
-            str,
-            StringConstraints(strip_whitespace=True, max_length=500),
-        ]
-        | None
-    ) = None
+    delivery_address: Annotated[
+        str, StringConstraints(strip_whitespace=True, min_length=5, max_length=500)
+    ]
+    delivery_latitude: Annotated[float, Field(ge=-90, le=90)]
+    delivery_longitude: Annotated[float, Field(ge=-180, le=180)]
     items: Annotated[list[StoreOrderItemRequest], Field(min_length=1, max_length=50)]
+
+
+class StoreDeliveryQuoteRequest(BaseModel):
+    latitude: Annotated[float, Field(ge=-90, le=90)]
+    longitude: Annotated[float, Field(ge=-180, le=180)]
+
+
+class StoreDeliveryQuoteResponse(BaseModel):
+    distance_km: float
+    fee_fcfa: int | None
+    zone_label: str
+    quote_required: bool
 
 
 class SalesOrderPageResponse(BaseModel):

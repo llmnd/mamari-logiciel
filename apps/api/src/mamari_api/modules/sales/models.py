@@ -59,6 +59,11 @@ class SalesOrder(Base):
     customer_phone: Mapped[str | None] = mapped_column(String(32), nullable=True)
     customer_email: Mapped[str | None] = mapped_column(String(320), nullable=True)
     delivery_address: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    delivery_latitude: Mapped[float | None] = mapped_column(nullable=True)
+    delivery_longitude: Mapped[float | None] = mapped_column(nullable=True)
+    delivery_distance_km: Mapped[float | None] = mapped_column(nullable=True)
+    delivery_fee_fcfa: Mapped[int | None] = mapped_column(BigInteger, nullable=True, default=0)
+    delivery_quote_required: Mapped[bool] = mapped_column(nullable=False, default=False)
     order_date: Mapped[date] = mapped_column(Date, nullable=False, default=date.today)
     amount_fcfa: Mapped[int] = mapped_column(BigInteger, nullable=False)
     status: Mapped[str] = mapped_column(

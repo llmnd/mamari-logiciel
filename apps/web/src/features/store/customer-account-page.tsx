@@ -667,9 +667,31 @@ export function CustomerAccountPage() {
                         </div>
                       </details>
                       <div className="customer-order-total">
-                        <span>Montant estimé</span>
+                        <span>Produits</span>
                         <strong>{formatFcfa(order.amount_fcfa)}</strong>
                       </div>
+                      <div className="customer-order-total">
+                        <span>
+                          Livraison
+                          {order.delivery_distance_km === null ? "" : ` · ${order.delivery_distance_km.toLocaleString("fr-FR")} km`}
+                        </span>
+                        <strong>
+                          {order.delivery_quote_required
+                            ? "À confirmer"
+                            : formatFcfa(order.delivery_fee_fcfa ?? 0)}
+                        </strong>
+                      </div>
+                      <div className="customer-order-total">
+                        <span>Total estimé</span>
+                        <strong>
+                          {order.delivery_quote_required
+                            ? "Frais à confirmer"
+                            : formatFcfa(order.amount_fcfa + (order.delivery_fee_fcfa ?? 0))}
+                        </strong>
+                      </div>
+                      {order.delivery_quote_required ? (
+                        <p className="checkout-delivery-warning">Les frais de livraison seront confirmés par notre équipe.</p>
+                      ) : null}
                       <div className="customer-order-actions">
                         <button
                           className="button-secondary"

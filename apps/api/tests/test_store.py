@@ -60,10 +60,43 @@ async def test_public_store_checkout_creates_order_and_reserves_stock(
     assert registration.status_code == 201
     assert registration.json()["customer_account"] is True
 
+    free_quote = await client.post(
+        "/api/v1/store/delivery-quote",
+        json={"latitude": 12.1348, "longitude": 15.0557},
+    )
+    assert free_quote.status_code == 200
+    assert free_quote.json() == {
+        "distance_km": 0.0,
+        "fee_fcfa": 0,
+        "zone_label": "À 5 km : gratuit",
+        "quote_required": False,
+    }
+    standard_quote = await client.post(
+        "/api/v1/store/delivery-quote",
+        json={"latitude": 12.2248, "longitude": 15.0557},
+    )
+    assert standard_quote.status_code == 200
+    assert standard_quote.json()["fee_fcfa"] == 1000
+    extended_quote = await client.post(
+        "/api/v1/store/delivery-quote",
+        json={"latitude": 12.3148, "longitude": 15.0557},
+    )
+    assert extended_quote.status_code == 200
+    assert extended_quote.json()["fee_fcfa"] == 2000
+    outside_quote = await client.post(
+        "/api/v1/store/delivery-quote",
+        json={"latitude": 13.1348, "longitude": 15.0557},
+    )
+    assert outside_quote.status_code == 200
+    assert outside_quote.json()["fee_fcfa"] is None
+    assert outside_quote.json()["quote_required"] is True
+
     checkout = await client.post(
         "/api/v1/store/orders",
         json={
-            "delivery_address": "Dakar, Sénégal",
+            "delivery_address": "Avenue Charles de Gaulle, N'Djamena, Tchad",
+            "delivery_latitude": 12.1348,
+            "delivery_longitude": 15.0557,
             "items": [
                 {"product_id": product_id, "quantity": 2},
                 {"product_id": product_id, "quantity": 1},
@@ -76,7 +109,10 @@ async def test_public_store_checkout_creates_order_and_reserves_stock(
     assert order["customer_name"] == "Aminata Diallo"
     assert order["customer_phone"] == "+221 77 123 45 67"
     assert order["customer_email"] == "aminata@example.com"
-    assert order["delivery_address"] == "Dakar, Sénégal"
+    assert order["delivery_address"] == "Avenue Charles de Gaulle, N'Djamena, Tchad"
+    assert order["delivery_distance_km"] == 0
+    assert order["delivery_fee_fcfa"] == 0
+    assert order["delivery_quote_required"] is False
     assert order["amount_fcfa"] == 10_500
     assert order["status"] == "pending"
     assert [event["status"] for event in order["status_history"]] == ["pending"]
@@ -127,7 +163,9 @@ async def test_public_store_checkout_creates_order_and_reserves_stock(
     second_checkout = await client.post(
         "/api/v1/store/orders",
         json={
-            "delivery_address": "Dakar, Sénégal",
+            "delivery_address": "Avenue Charles de Gaulle, N'Djamena, Tchad",
+            "delivery_latitude": 12.1348,
+            "delivery_longitude": 15.0557,
             "items": [{"product_id": product_id, "quantity": 1}],
         },
     )
@@ -159,7 +197,7 @@ async def test_public_store_checkout_creates_order_and_reserves_stock(
         "full_name": "Aminata Diallo",
         "email": "aminata@example.com",
         "phone": "+221 77 123 45 67",
-        "address": "Dakar, Sénégal",
+        "address": "Avenue Charles de Gaulle, N'Djamena, Tchad",
     }
     updated_profile = await client.put(
         "/api/v1/store/my-profile",
@@ -300,6 +338,9 @@ async def test_public_store_rejects_unavailable_products_and_exposes_only_publis
     unauthenticated_order = await client.post(
         "/api/v1/store/orders",
         json={
+            "delivery_address": "N'Djamena, Tchad",
+            "delivery_latitude": 12.1348,
+            "delivery_longitude": 15.0557,
             "items": [{"product_id": product_id, "quantity": 1}],
         },
     )
@@ -316,7 +357,12 @@ async def test_public_store_rejects_unavailable_products_and_exposes_only_publis
     assert registration.status_code == 201
     unavailable_order = await client.post(
         "/api/v1/store/orders",
-        json={"items": [{"product_id": product_id, "quantity": 1}]},
+        json={
+            "delivery_address": "N'Djamena, Tchad",
+            "delivery_latitude": 12.1348,
+            "delivery_longitude": 15.0557,
+            "items": [{"product_id": product_id, "quantity": 1}],
+        },
     )
     assert unavailable_order.status_code == 409
 

@@ -1,4 +1,5 @@
 import asyncio
+import math
 import uuid
 from datetime import date
 from pathlib import Path
@@ -41,6 +42,8 @@ from mamari_api.modules.sales.schemas import (
     SalesOrderPageResponse,
     SalesOrderResponse,
     StoreCustomerProfileResponse,
+    StoreDeliveryQuoteRequest,
+    StoreDeliveryQuoteResponse,
     StoreOrderSummaryResponse,
     StoreProductPageResponse,
     UpdateCustomerRequest,
@@ -65,6 +68,7 @@ CanViewSalesFinanceDep = Annotated[
     Depends(require_roles("owner", "admin", "manager")),
 ]
 MAX_PRODUCT_PHOTO_BYTES = 5 * 1024 * 1024
+EARTH_RADIUS_KM = 6371.0088
 PRODUCT_PHOTO_TYPES = {
     "image/jpeg": (".jpg", lambda data: data.startswith(b"\xff\xd8\xff")),
     "image/png": (".png", lambda data: data.startswith(b"\x89PNG\r\n\x1a\n")),
@@ -73,6 +77,43 @@ PRODUCT_PHOTO_TYPES = {
         lambda data: data.startswith(b"RIFF") and data[8:12] == b"WEBP",
     ),
 }
+
+
+def _store_delivery_quote(latitude: float, longitude: float) -> StoreDeliveryQuoteResponse:
+    settings = get_settings()
+    latitude_delta = math.radians(latitude - settings.delivery_origin_latitude)
+    longitude_delta = math.radians(longitude - settings.delivery_origin_longitude)
+    origin_latitude = math.radians(settings.delivery_origin_latitude)
+    destination_latitude = math.radians(latitude)
+    haversine = (
+        math.sin(latitude_delta / 2) ** 2
+        + math.cos(origin_latitude)
+        * math.cos(destination_latitude)
+        * math.sin(longitude_delta / 2) ** 2
+    )
+    distance_km = EARTH_RADIUS_KM * 2 * math.asin(math.sqrt(min(1, haversine)))
+    if distance_km <= settings.delivery_free_radius_km:
+        fee_fcfa = 0
+        zone_label = f"À {settings.delivery_free_radius_km:g} km : gratuit"
+        quote_required = False
+    elif distance_km <= settings.delivery_standard_radius_km:
+        fee_fcfa = settings.delivery_standard_fee_fcfa
+        zone_label = f"Jusqu’à {settings.delivery_standard_radius_km:g} km"
+        quote_required = False
+    elif distance_km <= settings.delivery_extended_radius_km:
+        fee_fcfa = settings.delivery_extended_fee_fcfa
+        zone_label = f"Jusqu’à {settings.delivery_extended_radius_km:g} km"
+        quote_required = False
+    else:
+        fee_fcfa = None
+        zone_label = "Hors zone de livraison estimée"
+        quote_required = True
+    return StoreDeliveryQuoteResponse(
+        distance_km=round(distance_km, 2),
+        fee_fcfa=fee_fcfa,
+        zone_label=zone_label,
+        quote_required=quote_required,
+    )
 
 
 @router.get(
@@ -680,6 +721,18 @@ async def read_store_product_photo(
 
 
 @router.post(
+    "/store/delivery-quote",
+    response_model=StoreDeliveryQuoteResponse,
+    summary="Estimer les frais de livraison de la boutique",
+)
+async def quote_store_delivery(
+    data: StoreDeliveryQuoteRequest,
+    user: CurrentUserDep,
+) -> StoreDeliveryQuoteResponse:
+    return _store_delivery_quote(data.latitude, data.longitude)
+
+
+@router.post(
     "/store/orders",
     response_model=SalesOrderResponse,
     status_code=status.HTTP_201_CREATED,
@@ -699,6 +752,7 @@ async def create_store_order(
     if organization is None:
         raise HTTPException(status_code=404, detail="La boutique Mamari est indisponible.")
 
+    delivery_quote = _store_delivery_quote(data.delivery_latitude, data.delivery_longitude)
     customer = await session.scalar(
         select(Customer).where(
             Customer.organization_id == organization.id,
@@ -774,7 +828,12 @@ async def create_store_order(
         customer_name=customer.name,
         customer_phone=customer.phone,
         customer_email=customer.email,
-        delivery_address=data.delivery_address or customer.address,
+        delivery_address=data.delivery_address,
+        delivery_latitude=data.delivery_latitude,
+        delivery_longitude=data.delivery_longitude,
+        delivery_distance_km=delivery_quote.distance_km,
+        delivery_fee_fcfa=delivery_quote.fee_fcfa,
+        delivery_quote_required=delivery_quote.quote_required,
         order_date=date.today(),
         amount_fcfa=amount_fcfa,
         status=OrderStatus.PENDING.value,

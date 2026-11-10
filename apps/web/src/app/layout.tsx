@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import type { ReactNode } from "react";
 import { AppShell } from "@/components/app-shell";
 import { Providers } from "@/components/providers";
+import "leaflet/dist/leaflet.css";
 import "lenis/dist/lenis.css";
 import "./globals.css";
 import "./refined.css";

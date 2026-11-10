@@ -456,7 +456,10 @@ export function SalesPage() {
                         ) : <span className="sales-manual-order">Saisie manuelle</span>}
                       </td>
                       <td>{formatDate(order.order_date)}</td>
-                      <td className="table-primary">{formatFcfa(order.amount_fcfa)}</td>
+                      <td className="table-primary">
+                        {formatFcfa(order.amount_fcfa + (order.delivery_fee_fcfa ?? 0))}
+                        {order.delivery_quote_required ? <small> · livraison à confirmer</small> : null}
+                      </td>
                       <td>
                         {canManageSales && order.status !== "cancelled" ? (
                           <label className="status-select-label">

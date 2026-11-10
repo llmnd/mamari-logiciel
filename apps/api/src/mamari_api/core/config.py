@@ -19,6 +19,13 @@ class Settings(BaseSettings):
     bootstrap_admin_username: str = "mamari"
     bootstrap_admin_password: SecretStr = SecretStr("passer123m")
     public_store_slug: str = "mamari"
+    delivery_origin_latitude: float = Field(default=12.1348, ge=-90, le=90)
+    delivery_origin_longitude: float = Field(default=15.0557, ge=-180, le=180)
+    delivery_free_radius_km: float = Field(default=5, gt=0)
+    delivery_standard_radius_km: float = Field(default=15, gt=0)
+    delivery_extended_radius_km: float = Field(default=30, gt=0)
+    delivery_standard_fee_fcfa: int = Field(default=1000, ge=0)
+    delivery_extended_fee_fcfa: int = Field(default=2000, ge=0)
     access_token_minutes: int = Field(default=15, ge=5, le=60)
     upload_directory: Path = PROJECT_ROOT / "storage" / "uploads"
 
@@ -57,6 +64,16 @@ class Settings(BaseSettings):
                 raise ValueError(
                     "Définir un JWT_SECRET_KEY unique d'au moins 32 caractères en production."
                 )
+        return self
+
+    @model_validator(mode="after")
+    def validate_delivery_ranges(self) -> "Settings":
+        if not (
+            self.delivery_free_radius_km
+            < self.delivery_standard_radius_km
+            < self.delivery_extended_radius_km
+        ):
+            raise ValueError("Les rayons de livraison doivent être strictement croissants.")
         return self
 
     model_config = SettingsConfigDict(

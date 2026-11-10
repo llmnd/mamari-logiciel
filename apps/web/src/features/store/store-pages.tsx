@@ -12,7 +12,9 @@ import {
   ChevronRight,
   Leaf,
   LoaderCircle,
+  LocateFixed,
   Menu,
+  MapPin,
   Minus,
   Plus,
   Search,
@@ -39,10 +41,24 @@ import type {
 } from "./store-types";
 import { useShopCart } from "./use-shop-cart";
 import { useProductPhoto } from "./use-product-photo";
+import { DeliveryMap, type DeliveryMapPoint } from "./delivery-map";
 import type { UserProfile } from "@/lib/api/client";
 
 const storeProductsQueryKey = ["store", "products"];
 type ShopCartSetter = ReturnType<typeof useShopCart>["setCart"];
+let lastNominatimRequestAt = 0;
+let nominatimQueue: Promise<void> = Promise.resolve();
+
+function requestNominatim(url: string): Promise<Response> {
+  const request = nominatimQueue.then(async () => {
+    const wait = Math.max(0, 1000 - (Date.now() - lastNominatimRequestAt));
+    if (wait) await new Promise((resolve) => window.setTimeout(resolve, wait));
+    lastNominatimRequestAt = Date.now();
+    return fetch(url, { headers: { "Accept-Language": "fr" } });
+  });
+  nominatimQueue = request.then(() => undefined, () => undefined);
+  return request;
+}
 
 function changeProductQuantity(
   setCart: ShopCartSetter,
@@ -61,6 +77,46 @@ function changeProductQuantity(
     }
     return { ...current, [product.id]: next };
   });
+}
+
+interface StoreDeliveryQuote {
+  distance_km: number;
+  fee_fcfa: number | null;
+  zone_label: string;
+  quote_required: boolean;
+}
+
+interface StoreDeliverySelection {
+  address: string;
+  latitude: number;
+  longitude: number;
+  quote: StoreDeliveryQuote;
+}
+
+interface StoreDeliveryQuoteRequest {
+  latitude: number;
+  longitude: number;
+  address: string;
+  requestId: number;
+}
+
+interface GeocodingResult {
+  lat: string;
+  lon: string;
+  display_name: string;
+}
+
+function isGeocodingResult(value: unknown): value is GeocodingResult {
+  return (
+    typeof value === "object"
+    && value !== null
+    && "lat" in value
+    && typeof value.lat === "string"
+    && "lon" in value
+    && typeof value.lon === "string"
+    && "display_name" in value
+    && typeof value.display_name === "string"
+  );
 }
 
 /* ------------------------------------------------------------------ */
@@ -1317,12 +1373,306 @@ export function StorePage() {
 /* ------------------------------------------------------------------ */
 const checkoutSteps = ["Panier", "Coordonnées", "Confirmation"] as const;
 
+function DeliveryAddressPicker({
+  initialAddress,
+  onChange,
+}: {
+  initialAddress: string;
+  onChange: (selection: StoreDeliverySelection | null) => void;
+}) {
+  const [address, setAddress] = useState(initialAddress);
+  const [results, setResults] = useState<GeocodingResult[]>([]);
+  const [selected, setSelected] = useState<GeocodingResult | null>(null);
+  const [searching, setSearching] = useState(false);
+  const [locating, setLocating] = useState(false);
+  const [resolvingLocation, setResolvingLocation] = useState(false);
+  const [searchError, setSearchError] = useState<string | null>(null);
+  const selectionVersion = useRef(0);
+  const [mapLocation, setMapLocation] = useState<DeliveryMapPoint | null>(null);
+  const deliveryQuote = useMutation({
+    mutationFn: (location: StoreDeliveryQuoteRequest) =>
+      apiRequest<StoreDeliveryQuote>("/store/delivery-quote", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          latitude: location.latitude,
+          longitude: location.longitude,
+        }),
+      }),
+    onSuccess: (quote, location) => {
+      if (location.requestId !== selectionVersion.current) return;
+      onChange({
+        address: location.address,
+        latitude: location.latitude,
+        longitude: location.longitude,
+        quote,
+      });
+    },
+    onError: () => onChange(null),
+  });
+
+  async function resolveCoordinates(
+    point: DeliveryMapPoint,
+    knownAddress?: string,
+  ) {
+    const requestId = ++selectionVersion.current;
+    const fallbackAddress = `Point de livraison (${point.latitude.toFixed(5)}, ${point.longitude.toFixed(5)})`;
+    setMapLocation(point);
+    setResults([]);
+    setSearchError(null);
+    setSelected({
+      lat: String(point.latitude),
+      lon: String(point.longitude),
+      display_name: knownAddress ?? fallbackAddress,
+    });
+    setResolvingLocation(!knownAddress);
+    onChange(null);
+    deliveryQuote.reset();
+
+    let resolvedAddress = knownAddress ?? fallbackAddress;
+    if (!knownAddress) {
+      try {
+        const params = new URLSearchParams({
+          lat: String(point.latitude),
+          lon: String(point.longitude),
+          format: "jsonv2",
+          addressdetails: "1",
+        });
+        const response = await requestNominatim(
+          `https://nominatim.openstreetmap.org/reverse?${params.toString()}`,
+        );
+        if (!response.ok) {
+          throw new Error("OpenStreetMap n’a pas pu préciser cette adresse.");
+        }
+        const payload: unknown = await response.json();
+        if (!isGeocodingResult(payload)) {
+          throw new Error("Aucune adresse détaillée n’a été trouvée pour ce point.");
+        }
+        resolvedAddress = payload.display_name;
+      } catch {
+        setSearchError(
+          "Adresse précise introuvable pour ce point. Vous pouvez la corriger dans le champ ci-dessus.",
+        );
+      }
+    }
+
+    if (requestId !== selectionVersion.current) return;
+    setAddress(resolvedAddress);
+    setSelected({
+      lat: String(point.latitude),
+      lon: String(point.longitude),
+      display_name: resolvedAddress,
+    });
+    setResolvingLocation(false);
+    deliveryQuote.mutate({
+      address: resolvedAddress,
+      latitude: point.latitude,
+      longitude: point.longitude,
+      requestId,
+    });
+  }
+
+  async function searchAddress() {
+    const query = address.trim();
+    if (query.length < 5) {
+      setSearchError("Saisissez une adresse un peu plus précise.");
+      return;
+    }
+
+    setSearching(true);
+    setSearchError(null);
+    setResults([]);
+    setSelected(null);
+    setMapLocation(null);
+    selectionVersion.current += 1;
+    onChange(null);
+    deliveryQuote.reset();
+
+    try {
+      const params = new URLSearchParams({
+        q: query,
+        format: "jsonv2",
+        addressdetails: "1",
+        limit: "5",
+      });
+      const response = await requestNominatim(
+        `https://nominatim.openstreetmap.org/search?${params.toString()}`,
+      );
+      if (!response.ok) {
+        throw new Error("Le service OpenStreetMap ne répond pas pour le moment.");
+      }
+      const payload: unknown = await response.json();
+      if (!Array.isArray(payload)) {
+        throw new Error("OpenStreetMap a renvoyé une réponse inattendue.");
+      }
+      const places = payload.filter(isGeocodingResult);
+      setResults(places);
+      if (!places.length) {
+        setSearchError("Aucune adresse trouvée. Essayez avec un quartier ou un repère proche.");
+      }
+    } catch (error) {
+      setSearchError(
+        error instanceof Error ? error.message : "Impossible de rechercher cette adresse.",
+      );
+    } finally {
+      setSearching(false);
+    }
+  }
+
+  function chooseAddress(place: GeocodingResult) {
+    const latitude = Number(place.lat);
+    const longitude = Number(place.lon);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) {
+      setSearchError("Cette adresse ne possède pas de coordonnées valides.");
+      return;
+    }
+    void resolveCoordinates({ latitude, longitude }, place.display_name);
+  }
+
+  function chooseMapPoint(point: DeliveryMapPoint) {
+    void resolveCoordinates(point);
+  }
+
+  function locateCustomer() {
+    if (!navigator.geolocation) {
+      setSearchError("La géolocalisation n’est pas disponible sur cet appareil.");
+      return;
+    }
+    setLocating(true);
+    setSearchError(null);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setLocating(false);
+        chooseMapPoint({
+          latitude: position.coords.latitude,
+          longitude: position.coords.longitude,
+        });
+      },
+      (error) => {
+        setLocating(false);
+        setSearchError(
+          error.code === error.PERMISSION_DENIED
+            ? "Autorisez la localisation dans les paramètres de votre navigateur, puis réessayez. Vous pouvez aussi placer le repère directement sur la carte."
+            : "Position indisponible. Vous pouvez choisir votre point directement sur la carte.",
+        );
+      },
+      { enableHighAccuracy: true, timeout: 12_000, maximumAge: 30_000 },
+    );
+  }
+
+  const selectedLatitude = selected ? Number(selected.lat) : null;
+  const selectedLongitude = selected ? Number(selected.lon) : null;
+
+  return (
+    <div className="delivery-location-picker">
+      <div className="auth-field">
+        <label htmlFor="delivery-address-search">
+          Adresse de livraison
+        </label>
+        <div className="delivery-address-search">
+          <input
+            id="delivery-address-search"
+            autoComplete="street-address"
+            maxLength={500}
+            onKeyDown={(event) => {
+              if (event.key === "Enter") {
+                event.preventDefault();
+                void searchAddress();
+              }
+            }}
+            onChange={(event) => {
+              const nextAddress = event.target.value;
+              setAddress(nextAddress);
+              setResults([]);
+              if (selected && deliveryQuote.data && nextAddress.trim().length >= 5) {
+                const nextSelected = { ...selected, display_name: nextAddress };
+                setSelected(nextSelected);
+                onChange({
+                  address: nextAddress,
+                  latitude: Number(nextSelected.lat),
+                  longitude: Number(nextSelected.lon),
+                  quote: deliveryQuote.data,
+                });
+              } else {
+                onChange(null);
+              }
+            }}
+            placeholder="Quartier, rue, ville…"
+            value={address}
+          />
+          <button type="button" disabled={searching} onClick={() => void searchAddress()}>
+            {searching ? <LoaderCircle className="auth-spinner" size={16} /> : <Search size={16} />}
+            Rechercher
+          </button>
+        </div>
+      </div>
+      <div className="delivery-map-toolbar">
+        <p>Placez le repère sur votre adresse, puis faites-le glisser pour ajuster le point exact.</p>
+        <button type="button" disabled={locating} onClick={locateCustomer}>
+          {locating ? <LoaderCircle className="auth-spinner" size={16} /> : <LocateFixed size={16} />}
+          {locating ? "Localisation…" : "Utiliser ma position"}
+        </button>
+      </div>
+      <DeliveryMap location={mapLocation} onSelect={chooseMapPoint} />
+      <small className="delivery-privacy-note">
+        Appuyez sur « Utiliser ma position » pour autoriser votre navigateur à vous localiser.
+        Sinon, cliquez ou touchez la carte pour poser le repère, puis faites-le glisser pour corriger l’emplacement.
+        La recherche d’adresse est transmise à OpenStreetMap.
+      </small>
+      {searchError ? <p className="auth-error" role="alert">{searchError}</p> : null}
+      {results.length ? (
+        <div className="delivery-address-results" aria-label="Résultats d’adresse">
+          {results.map((place) => (
+            <button key={`${place.lat},${place.lon}`} type="button" onClick={() => chooseAddress(place)}>
+              <MapPin size={16} />
+              <span>{place.display_name}</span>
+            </button>
+          ))}
+        </div>
+      ) : null}
+      {selected ? (
+        <p className="delivery-map-coordinates">
+          Point sélectionné : {selectedLatitude?.toFixed(5)}, {selectedLongitude?.toFixed(5)}
+        </p>
+      ) : null}
+      {resolvingLocation ? (
+        <p className="delivery-quote-status" role="status">Recherche de l’adresse de ce point…</p>
+      ) : null}
+      {deliveryQuote.isPending ? (
+        <p className="delivery-quote-status" role="status">Calcul de la distance et des frais…</p>
+      ) : null}
+      {deliveryQuote.isError ? (
+        <p className="auth-error" role="alert">{getApiErrorMessage(deliveryQuote.error)}</p>
+      ) : null}
+      {deliveryQuote.data ? (
+        <div className={`delivery-quote${deliveryQuote.data.quote_required ? " is-outside-zone" : ""}`} role="status">
+          <MapPin size={17} />
+          <span>
+            <strong>{deliveryQuote.data.distance_km.toLocaleString("fr-FR")} km · {deliveryQuote.data.zone_label}</strong>
+            <small>
+              {deliveryQuote.data.quote_required
+                ? "L’équipe confirmera les frais avant validation définitive."
+                : `Frais estimés : ${formatFcfa(deliveryQuote.data.fee_fcfa ?? 0)}`}
+            </small>
+          </span>
+        </div>
+      ) : null}
+      <small className="delivery-terms-note">
+        Estimation de test calculée depuis le centre de N’Djamena, à vol d’oiseau. L’équipe confirmera le montant final.
+      </small>
+      <span className="delivery-map-attribution">
+        Recherche et carte © <a href="https://www.openstreetmap.org/copyright" target="_blank" rel="noreferrer">OpenStreetMap</a>
+      </span>
+    </div>
+  );
+}
+
 export function CartPage() {
   const queryClient = useQueryClient();
   const { cart, setCart } = useShopCart();
   const [step, setStep] = useState(0);
   const [completedOrder, setCompletedOrder] = useState<StoreOrder | null>(null);
-  const [deliveryAddressOverride, setDeliveryAddressOverride] = useState<string | null>(null);
+  const [deliverySelection, setDeliverySelection] = useState<StoreDeliverySelection | null>(null);
   const products = useQuery({
     queryKey: storeProductsQueryKey,
     queryFn: () => apiRequest<StoreProductPage>("/store/products"),
@@ -1339,10 +1689,11 @@ export function CartPage() {
     enabled: profile.data?.customer_account === true,
     retry: false,
   });
-  const deliveryAddress = deliveryAddressOverride ?? customerProfile.data?.address ?? "";
   const checkout = useMutation({
     mutationFn: (data: {
-      delivery_address?: string;
+      delivery_address: string;
+      delivery_latitude: number;
+      delivery_longitude: number;
       items: { product_id: string; quantity: number }[];
     }) => apiRequest<StoreOrder>("/store/orders", {
       method: "POST",
@@ -1395,9 +1746,11 @@ export function CartPage() {
 
   function submitOrder(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
-    const formData = new FormData(event.currentTarget);
+    if (!deliverySelection) return;
     checkout.mutate({
-      delivery_address: String(formData.get("delivery_address") ?? "") || undefined,
+      delivery_address: deliverySelection.address,
+      delivery_latitude: deliverySelection.latitude,
+      delivery_longitude: deliverySelection.longitude,
       items: cartItems.map(({ product, quantity }) => ({
         product_id: product.id,
         quantity,
@@ -1460,9 +1813,32 @@ export function CartPage() {
               la disponibilité et les modalités de règlement.
             </p>
             <div className="checkout-complete-summary">
-              <span>{completedOrder.items.reduce((sum, item) => sum + item.quantity, 0)} article(s)</span>
+              <span>
+                {completedOrder.items.reduce((sum, item) => sum + item.quantity, 0)} article(s) · produits
+              </span>
               <strong>{formatFcfa(completedOrder.amount_fcfa)}</strong>
             </div>
+            <div className="checkout-complete-delivery">
+              <span>Livraison {completedOrder.delivery_distance_km === null ? "" : `(${completedOrder.delivery_distance_km} km)`}</span>
+              <strong>
+                {completedOrder.delivery_quote_required
+                  ? "À confirmer"
+                  : formatFcfa(completedOrder.delivery_fee_fcfa ?? 0)}
+              </strong>
+            </div>
+            <div className="checkout-complete-summary">
+              <span>Total estimé</span>
+              <strong>
+                {completedOrder.delivery_quote_required
+                  ? "Frais à confirmer"
+                  : formatFcfa(
+                      completedOrder.amount_fcfa + (completedOrder.delivery_fee_fcfa ?? 0),
+                    )}
+              </strong>
+            </div>
+            {completedOrder.delivery_quote_required ? (
+              <p className="checkout-delivery-warning">Les frais de livraison seront confirmés par notre équipe avant validation définitive.</p>
+            ) : null}
             <Link className="button-primary checkout-home-link" href="/produits">
               Retour à la boutique <ArrowRight size={16} />
             </Link>
@@ -1540,8 +1916,11 @@ export function CartPage() {
                   </p>
                 ) : null}
                 <div><span>Sous-total ({itemCount} article(s))</span><strong>{formatFcfa(total)}</strong></div>
-                <div><span>Livraison</span><span>À confirmer</span></div>
-                <div className="checkout-summary-total"><span>Total estimé</span><strong>{formatFcfa(total)}</strong></div>
+                <div><span>Livraison</span><span>Calculée à l’étape suivante</span></div>
+                <div className="checkout-summary-total"><span>Total produits</span><strong>{formatFcfa(total)}</strong></div>
+                <p className="checkout-delivery-rate-note">
+                  Tarif test depuis le centre de N’Djamena : gratuit jusqu’à 5 km, 1 000 FCFA jusqu’à 15 km, 2 000 FCFA jusqu’à 30 km. Au-delà, frais à confirmer.
+                </p>
                 <button className="button-primary checkout-next-button" type="button" disabled={hasUnavailableItems} onClick={() => setStep(1)}>
                   Passer aux coordonnées <ArrowRight size={16} />
                 </button>
@@ -1581,16 +1960,11 @@ export function CartPage() {
                       Impossible de charger votre adresse enregistrée. {getApiErrorMessage(customerProfile.error)}
                     </p>
                   ) : null}
-                  <label className="auth-field">
-                    <span>Adresse ou indications <small>(facultatif)</small></span>
-                    <textarea
-                      maxLength={500}
-                      name="delivery_address"
-                      onChange={(event) => setDeliveryAddressOverride(event.target.value)}
-                      rows={3}
-                      value={deliveryAddress}
-                    />
-                  </label>
+                  <DeliveryAddressPicker
+                    key={customerProfile.data?.address ?? ""}
+                    initialAddress={customerProfile.data?.address ?? ""}
+                    onChange={setDeliverySelection}
+                  />
                   {checkout.isError ? (
                     <p className="auth-error checkout-form-error" role="alert">
                       {getApiErrorMessage(checkout.error)}
@@ -1600,7 +1974,7 @@ export function CartPage() {
                     <button className="button-secondary" type="button" onClick={() => setStep(0)}>
                       <ArrowLeft size={15} /> Retour au panier
                     </button>
-                    <button className="button-primary" disabled={checkout.isPending} type="submit">
+                    <button className="button-primary" disabled={checkout.isPending || !deliverySelection} type="submit">
                       {checkout.isPending ? <LoaderCircle className="auth-spinner" size={16} /> : null}
                       {checkout.isPending ? "Envoi en cours…" : "Confirmer la commande"}
                       {!checkout.isPending ? <ArrowRight size={16} /> : null}
@@ -1610,6 +1984,22 @@ export function CartPage() {
                     Aucun paiement en ligne. Le règlement sera organisé avec notre équipe.
                   </p>
                 </form>
+              ) : profile.data ? (
+                <div className="customer-checkout-auth">
+                  <ShoppingBag size={24} />
+                  <h3>Vous êtes connecté à l’espace équipe</h3>
+                  <p>
+                    Le compte « {profile.data.username} » est un compte d’équipe, pas un compte client.
+                    La connexion fonctionne, mais il faut un compte client pour passer commande.
+                  </p>
+                  <Link className="button-primary" href="/register?next=%2Fpanier">
+                    Créer un compte client <ArrowRight size={15} />
+                  </Link>
+                  <p className="auth-switch">
+                    Vous avez déjà un compte client ?{" "}
+                    <Link href="/login?next=%2Fpanier">Se connecter avec ce compte</Link>
+                  </p>
+                </div>
               ) : (
                 <div className="customer-checkout-auth">
                   <ShoppingBag size={24} />
@@ -1634,7 +2024,27 @@ export function CartPage() {
                     <strong>{formatFcfa(product.price_fcfa * quantity)}</strong>
                   </div>
                 ))}
-                <div className="checkout-summary-total"><span>Total estimé</span><strong>{formatFcfa(total)}</strong></div>
+                <div className="checkout-summary-product">
+                  <span>
+                    Livraison{deliverySelection ? ` · ${deliverySelection.quote.distance_km.toLocaleString("fr-FR")} km` : ""}
+                  </span>
+                  <strong>
+                    {!deliverySelection
+                      ? "À calculer"
+                      : deliverySelection.quote.quote_required
+                        ? "À confirmer"
+                        : formatFcfa(deliverySelection.quote.fee_fcfa ?? 0)}
+                  </strong>
+                </div>
+                <div className="checkout-summary-total">
+                  <span>Total estimé</span>
+                  <strong>
+                    {formatFcfa(total + (deliverySelection?.quote.fee_fcfa ?? 0))}
+                  </strong>
+                </div>
+                {deliverySelection?.quote.quote_required ? (
+                  <p className="checkout-delivery-warning">Hors zone : les frais ne sont pas inclus dans le total estimé.</p>
+                ) : null}
                 <p><ShieldCheck size={14} /> Vous pourrez confirmer les détails avec notre équipe.</p>
               </aside>
             </div>

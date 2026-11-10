@@ -191,7 +191,9 @@ async def test_pending_order_cancellation_is_executed_when_approved(
     order = await client.post(
         "/api/v1/store/orders",
         json={
-            "delivery_address": "Dakar",
+            "delivery_address": "N'Djamena, Tchad",
+            "delivery_latitude": 12.1348,
+            "delivery_longitude": 15.0557,
             "items": [{"product_id": product.json()["id"], "quantity": 1}],
         },
     )
