@@ -1,6 +1,6 @@
 """Add stock thresholds, audit events and approval requests.
 
-Revision ID: 0022_stock_thresholds_audit_approvals
+Revision ID: 0022_stock_audit_approvals
 Revises: 0021_sales_order_status_history
 Create Date: 2026-11-09
 """
@@ -11,7 +11,7 @@ import sqlalchemy as sa
 from alembic import op
 from sqlalchemy.dialects import postgresql
 
-revision: str = "0022_stock_thresholds_audit_approvals"
+revision: str = "0022_stock_audit_approvals"
 down_revision: str | None = "0021_sales_order_status_history"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None

@@ -1,7 +1,7 @@
 """Store public contact inquiries and newsletter consent.
 
 Revision ID: 0023_public_site_inquiries
-Revises: 0022_stock_thresholds_audit_approvals
+Revises: 0022_stock_audit_approvals
 Create Date: 2026-11-09
 """
 
@@ -12,7 +12,7 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision: str = "0023_public_site_inquiries"
-down_revision: str | None = "0022_stock_thresholds_audit_approvals"
+down_revision: str | None = "0022_stock_audit_approvals"
 branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
